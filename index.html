@@ -191,6 +191,7 @@
       <div class="map-tools">
         <button onclick="toggleSatellite()" title="Vue satellite" id="btn-sat">🛰️</button>
         <button onclick="startFreePlacement()" title="Poser un POI librement" id="btn-free">🎯</button>
+        <button onclick="toggleShare()" title="Cacher ma position" id="btn-share">👁️</button>
       </div>
       <div class="fab-poi">
         <button onclick="openPoiModal(null)" title="POI à ma position">📍</button>
@@ -392,6 +393,7 @@ function initMap(){
   meMarker.bindTooltip(profile ? (profile.prenom + ' (moi)') : 'Moi', { permanent:false });
   map.on('click', function(e){ if(!freeMode) openPoiModal(e.latlng); });
   registerTileCache();
+  initShareButton();
 }
 
 function toggleSatellite(){
@@ -483,6 +485,26 @@ function startGPS(){
   watchId = navigator.geolocation.watchPosition(onPosition, function(err){ console.error(err); }, { enableHighAccuracy:true, maximumAge:5000, timeout:20000 });
 }
 
+var sharePosition = localStorage.getItem('chasse_share_position') !== 'off';
+function initShareButton(){
+  var btn = document.getElementById('btn-share');
+  btn.textContent = sharePosition ? '👁️' : '🙈';
+  btn.title = sharePosition ? 'Cacher ma position' : 'Afficher ma position';
+  btn.classList.toggle('on', !sharePosition);
+}
+async function toggleShare(){
+  sharePosition = !sharePosition;
+  localStorage.setItem('chasse_share_position', sharePosition ? 'on' : 'off');
+  initShareButton();
+  if(!sharePosition){
+    var startOfDay = new Date(); startOfDay.setHours(0,0,0,0);
+    await sb.from('chasse_positions').delete().eq('user_id', currentUser.id).gte('created_at', startOfDay.toISOString());
+    toast('Votre position est masquée pour les autres');
+  } else {
+    toast('Votre position est de nouveau visible');
+  }
+}
+
 var lastSave = 0;
 function onPosition(pos){
   var lat = pos.coords.latitude, lng = pos.coords.longitude;
@@ -491,9 +513,9 @@ function onPosition(pos){
   var inside = pointInPolygon(lat, lng, communeGeom);
   document.getElementById('hors-commune').classList.toggle('show', !inside);
 
-  // enregistre la position toutes les ~15s pour le suivi partagé
+  // enregistre la position toutes les ~15s pour le suivi partagé (sauf si masqué)
   var now = Date.now();
-  if(now - lastSave > 15000){
+  if(sharePosition && now - lastSave > 15000){
     lastSave = now;
     sb.from('chasse_positions').insert({ user_id: currentUser.id, lat: lat, lng: lng }).then(function(){});
   }
@@ -542,7 +564,26 @@ function subscribePositions(){
       userPositions[r.user_id] = [r.lat, r.lng];
       upsertUserOnMap(r.user_id, r.lat, r.lng, path[r.user_id]);
     })
+    .on('postgres_changes', { event:'DELETE', schema:'public', table:'chasse_positions' }, function(payload){
+      if(payload.old && payload.old.user_id) refreshUserTrack(payload.old.user_id);
+    })
     .subscribe();
+}
+
+async function refreshUserTrack(uid){
+  var startOfDay = new Date(); startOfDay.setHours(0,0,0,0);
+  var { data } = await sb.from('chasse_positions').select('lat,lng,created_at').eq('user_id', uid).gte('created_at', startOfDay.toISOString()).order('created_at', { ascending:true });
+  var path = (upsertUserOnMap._paths = upsertUserOnMap._paths || {});
+  if(!data || !data.length){
+    if(userMarkers[uid]){ map.removeLayer(userMarkers[uid]); delete userMarkers[uid]; }
+    if(userLines[uid]){ map.removeLayer(userLines[uid]); delete userLines[uid]; }
+    delete path[uid];
+    return;
+  }
+  var pts = data.map(function(p){ return [p.lat, p.lng]; });
+  path[uid] = pts;
+  var last = pts[pts.length-1];
+  upsertUserOnMap(uid, last[0], last[1], pts);
 }
 
 async function loadAllProfiles(){
