@@ -1,0 +1,822 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>Chasse Prignac-et-Marcamps</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+<style>
+  :root{
+    --vert:#2f6d3a; --vert-d:#234f2b; --vert-l:#e8f2e9;
+    --rouge:#c0392b; --gris:#6b7280; --gris-l:#f3f4f6; --bord:#e2e5e9;
+    --ombre:0 2px 10px rgba(0,0,0,.12);
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+  html,body{margin:0;height:100%;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;background:#fff;color:#1f2937;overscroll-behavior:none;-webkit-overflow-scrolling:touch;}
+  #app{position:fixed;inset:0;display:flex;flex-direction:column;overscroll-behavior:none;}
+  .hidden{display:none !important;}
+  button{font:inherit;cursor:pointer;border:none;border-radius:10px;}
+  input,select,textarea{font:inherit;border:1px solid var(--bord);border-radius:10px;padding:10px 12px;width:100%;background:#fff;}
+  label{font-size:13px;font-weight:600;color:#374151;display:block;margin:10px 0 4px;}
+
+  /* ---------- AUTH ---------- */
+  #auth-screen{flex:1;display:flex;align-items:center;justify-content:center;padding:24px;background:linear-gradient(160deg,var(--vert-d),var(--vert));}
+  .auth-card{background:#fff;border-radius:16px;padding:26px 22px;width:100%;max-width:380px;box-shadow:var(--ombre);}
+  .auth-card h1{font-size:20px;margin:0 0 4px;color:var(--vert-d);}
+  .auth-card p.sub{margin:0 0 16px;color:var(--gris);font-size:13px;}
+  .auth-tabs{display:flex;background:var(--gris-l);border-radius:10px;padding:3px;margin-bottom:14px;}
+  .auth-tabs button{flex:1;padding:9px;background:transparent;border-radius:8px;font-weight:600;color:var(--gris);font-size:14px;}
+  .auth-tabs button.active{background:#fff;color:var(--vert-d);box-shadow:var(--ombre);}
+  .btn-primary{background:var(--vert);color:#fff;padding:12px;width:100%;font-weight:700;font-size:15px;margin-top:16px;}
+  .btn-primary:disabled{opacity:.5;}
+  .msg{font-size:13px;margin-top:10px;padding:10px;border-radius:8px;}
+  .msg.err{background:#fdecea;color:var(--rouge);}
+  .msg.ok{background:var(--vert-l);color:var(--vert-d);}
+
+  /* ---------- PENDING ---------- */
+  #pending-screen{flex:1;display:flex;align-items:center;justify-content:center;padding:24px;text-align:center;}
+  #pending-screen .box{max-width:340px;}
+  #pending-screen .icon{font-size:42px;margin-bottom:10px;}
+  #pending-screen h2{margin:0 0 8px;color:var(--vert-d);}
+  #pending-screen p{color:var(--gris);font-size:14px;line-height:1.5;}
+
+  /* ---------- MAIN APP ---------- */
+  #main{flex:1;display:none;flex-direction:column;min-height:0;}
+  #main.on{display:flex;}
+  header{background:var(--vert-d);color:#fff;padding:calc(10px + env(safe-area-inset-top)) 14px 10px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;z-index:20;}
+  header .title{font-weight:700;font-size:15px;display:flex;align-items:center;gap:8px;}
+  header button.icon-btn{background:rgba(255,255,255,.15);color:#fff;width:36px;height:36px;border-radius:8px;font-size:16px;}
+
+  #hors-commune{position:absolute;top:8px;left:50%;transform:translateX(-50%);z-index:1000;background:var(--rouge);color:#fff;padding:8px 16px;border-radius:20px;font-weight:700;font-size:13px;box-shadow:var(--ombre);display:none;white-space:nowrap;}
+  #hors-commune.show{display:block;}
+
+  #navrail{position:fixed;top:50%;right:10px;transform:translateY(-50%);z-index:950;display:none;flex-direction:column;gap:10px;padding-right:env(safe-area-inset-right);}
+  #main.on ~ #navrail{display:flex;}
+  #navrail button{width:50px;height:50px;border-radius:50%;background:#fff;color:var(--gris);box-shadow:var(--ombre);font-size:21px;display:flex;align-items:center;justify-content:center;}
+  #navrail button.active{background:var(--vert);color:#fff;}
+
+  .view{flex:1;min-height:0;display:none;position:relative;overflow:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;}
+  .view.on{display:block;}
+  #view-map{overflow:hidden;}
+  #map{position:absolute;inset:0;}
+
+  .map-tools{position:absolute;top:92px;right:10px;z-index:900;display:flex;flex-direction:column;gap:8px;}
+  .map-tools button{width:36px;height:36px;border-radius:8px;background:#fff;box-shadow:var(--ombre);font-size:16px;color:var(--gris);display:flex;align-items:center;justify-content:center;}
+  .map-tools button.on{background:var(--vert);color:#fff;}
+
+  .fab-poi{position:absolute;right:14px;bottom:calc(16px + env(safe-area-inset-bottom));z-index:900;}
+  .fab-poi button{width:52px;height:52px;border-radius:50%;background:var(--vert);color:#fff;box-shadow:var(--ombre);font-size:21px;display:flex;align-items:center;justify-content:center;}
+
+  #crosshair{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);z-index:850;width:36px;height:36px;pointer-events:none;display:none;}
+  #crosshair.on{display:block;}
+  #crosshair::before,#crosshair::after{content:'';position:absolute;background:var(--rouge);}
+  #crosshair::before{left:50%;top:0;bottom:0;width:2px;transform:translateX(-50%);}
+  #crosshair::after{top:50%;left:0;right:0;height:2px;transform:translateY(-50%);}
+  #free-confirm{position:absolute;left:50%;bottom:calc(20px + env(safe-area-inset-bottom));transform:translateX(-50%);z-index:900;display:none;gap:10px;}
+  #free-confirm.on{display:flex;}
+  #free-confirm button{padding:12px 18px;border-radius:24px;font-weight:700;font-size:14px;box-shadow:var(--ombre);}
+  #free-confirm .ok{background:var(--vert);color:#fff;}
+  #free-confirm .cancel{background:#fff;color:var(--gris);}
+
+  .panel{padding:14px;}
+  .panel h2{font-size:16px;margin:0 0 12px;color:var(--vert-d);}
+  .card{background:#fff;border:1px solid var(--bord);border-radius:12px;padding:12px 14px;margin-bottom:10px;box-shadow:var(--ombre);}
+  .card .row1{display:flex;justify-content:space-between;align-items:flex-start;gap:8px;}
+  .badge{display:inline-block;font-size:11px;font-weight:700;padding:2px 8px;border-radius:20px;}
+  .badge.prive{background:var(--gris-l);color:var(--gris);}
+  .badge.public{background:var(--vert-l);color:var(--vert-d);}
+  .small-btn{background:var(--gris-l);color:#374151;padding:6px 10px;font-size:12px;font-weight:600;border-radius:8px;}
+  .small-btn.danger{background:#fdecea;color:var(--rouge);}
+  .empty{color:var(--gris);font-size:13px;text-align:center;padding:30px 10px;}
+
+  /* calendar */
+  .cal-card{background:#fff;border:1px solid var(--bord);border-radius:14px;padding:12px;box-shadow:var(--ombre);max-width:340px;margin:0 auto;}
+  .cal-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;}
+  .cal-head h3{margin:0;font-size:13px;font-weight:700;text-transform:capitalize;color:var(--vert-d);}
+  .cal-head button{background:var(--gris-l);width:26px;height:26px;border-radius:7px;font-size:13px;color:var(--vert-d);}
+  .cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:2px;}
+  .cal-dow{font-size:9px;text-align:center;color:var(--gris);font-weight:700;padding-bottom:3px;}
+  .cal-day{aspect-ratio:1;max-height:38px;border-radius:6px;background:var(--gris-l);display:flex;flex-direction:column;align-items:center;justify-content:center;font-size:11px;font-weight:600;color:#374151;position:relative;gap:1px;}
+  .cal-day.out{background:transparent;pointer-events:none;}
+  .cal-day.partial{background:#f59e0b;color:#fff;font-weight:800;}
+  .cal-day.full{background:var(--rouge);color:#fff;font-weight:800;}
+  .cal-day.today{box-shadow:inset 0 0 0 2px var(--vert-d);}
+  .cal-day .count{font-size:8px;font-weight:700;opacity:.9;}
+
+  /* modal */
+  .modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:2000;display:flex;align-items:flex-end;justify-content:center;}
+  .modal-bg.center{align-items:center;padding:20px;}
+  .modal-bg.center .modal{border-radius:16px;max-width:400px;}
+  .modal{background:#fff;border-radius:16px 16px 0 0;width:100%;max-width:480px;padding:18px 18px 24px;max-height:85vh;overflow:auto;}
+  .modal h3{margin:0 0 4px;font-size:16px;color:var(--vert-d);}
+  .modal .close{position:absolute;}
+  .radio-row{display:flex;gap:10px;margin-top:6px;}
+  .radio-row label{flex:1;display:flex;align-items:center;gap:6px;background:var(--gris-l);padding:10px;border-radius:10px;font-size:13px;font-weight:600;margin:0;}
+  .radio-row input{width:auto;}
+  .slot-btn{width:100%;text-align:left;padding:12px 14px;border-radius:10px;margin-bottom:8px;background:var(--gris-l);display:flex;justify-content:space-between;align-items:center;font-weight:600;}
+  .slot-btn.free{background:var(--vert-l);color:var(--vert-d);}
+  .slot-btn.taken{background:#fdecea;color:var(--rouge);}
+  .modal-actions{display:flex;gap:10px;margin-top:16px;}
+  .modal-actions button{flex:1;padding:11px;font-weight:700;}
+  .btn-cancel{background:var(--gris-l);color:#374151;}
+
+  .toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#1f2937;color:#fff;padding:10px 18px;border-radius:20px;font-size:13px;z-index:3000;box-shadow:var(--ombre);}
+</style>
+</head>
+<body>
+<div id="app">
+
+  <!-- ============ AUTH ============ -->
+  <div id="auth-screen">
+    <div class="auth-card">
+      <h1>🦌 Chasse Prignac</h1>
+      <p class="sub">Suivi GPS &amp; réservation pilône — commune de Prignac-et-Marcamps</p>
+      <div class="auth-tabs">
+        <button id="tab-login" class="active" onclick="setAuthTab('login')">Connexion</button>
+        <button id="tab-signup" onclick="setAuthTab('signup')">Inscription</button>
+      </div>
+
+      <div id="form-login">
+        <label>Email</label>
+        <input type="email" id="login-email" autocomplete="username">
+        <label>Mot de passe</label>
+        <input type="password" id="login-pass" autocomplete="current-password">
+        <button class="btn-primary" onclick="doLogin()">Se connecter</button>
+      </div>
+
+      <div id="form-signup" class="hidden">
+        <label>Prénom</label>
+        <input type="text" id="signup-prenom" placeholder="Ton prénom">
+        <label>Email</label>
+        <input type="email" id="signup-email" autocomplete="username">
+        <label>Mot de passe</label>
+        <input type="password" id="signup-pass" autocomplete="new-password" placeholder="6 caractères minimum">
+        <button class="btn-primary" onclick="doSignup()">Créer mon compte</button>
+      </div>
+
+      <div id="auth-msg"></div>
+    </div>
+  </div>
+
+  <!-- ============ PENDING ============ -->
+  <div id="pending-screen" class="hidden">
+    <div class="box">
+      <div class="icon">⏳</div>
+      <h2>Compte en attente de validation</h2>
+      <p>Un administrateur doit valider ton inscription avant que tu puisses accéder à la carte et aux réservations. Reviens un peu plus tard.</p>
+      <button class="small-btn" style="margin-top:18px" onclick="doLogout()">Se déconnecter</button>
+    </div>
+  </div>
+
+  <!-- ============ MAIN ============ -->
+  <div id="main">
+    <header>
+      <div class="title">🦌 <span id="hdr-title">Carte</span></div>
+      <div style="display:flex;gap:8px;">
+        <button class="icon-btn" onclick="doLogout()" title="Déconnexion">⏻</button>
+      </div>
+    </header>
+
+    <!-- CARTE -->
+    <div class="view on" id="view-map">
+      <div id="hors-commune">⚠️ HORS COMMUNE</div>
+      <div id="map"></div>
+      <div id="crosshair"></div>
+      <div id="free-confirm">
+        <button class="cancel" onclick="cancelFreePlacement()">Annuler</button>
+        <button class="ok" onclick="confirmFreePlacement()">Placer ici</button>
+      </div>
+      <div class="map-tools">
+        <button onclick="toggleSatellite()" title="Vue satellite" id="btn-sat">🛰️</button>
+        <button onclick="startFreePlacement()" title="Poser un POI librement" id="btn-free">🎯</button>
+      </div>
+      <div class="fab-poi">
+        <button onclick="openPoiModal(null)" title="POI à ma position">📍</button>
+      </div>
+    </div>
+
+    <!-- POI -->
+    <div class="view" id="view-poi">
+      <div class="panel">
+        <h2>Mes POI privés</h2>
+        <div id="poi-list-prive"></div>
+        <h2 style="margin-top:20px">POI partagés (tous les inscrits)</h2>
+        <div id="poi-list-public"></div>
+      </div>
+    </div>
+
+    <!-- RESERVATION -->
+    <div class="view" id="view-resa">
+      <div class="panel">
+        <h2>Réservation du pilône</h2>
+        <div class="cal-card">
+          <div class="cal-head">
+            <button onclick="calShift(-1)">‹</button>
+            <h3 id="cal-title"></h3>
+            <button onclick="calShift(1)">›</button>
+          </div>
+          <div class="cal-grid" id="cal-grid"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ADMIN -->
+    <div class="view" id="view-admin">
+      <div class="panel">
+        <h2>Inscriptions en attente</h2>
+        <div id="admin-pending"></div>
+        <h2 style="margin-top:20px">Chasseurs validés</h2>
+        <div id="admin-approved"></div>
+      </div>
+    </div>
+
+  </div>
+
+  <div id="navrail">
+    <button class="active" data-tab="map" onclick="setTab('map')" title="Carte">🗺️</button>
+    <button data-tab="poi" onclick="setTab('poi')" title="POI">📋</button>
+    <button data-tab="resa" onclick="setTab('resa')" title="Pilône">🪜</button>
+    <button data-tab="admin" id="tab-btn-admin" class="hidden" onclick="setTab('admin')" title="Admin">🛠️</button>
+  </div>
+
+</div>
+
+<script>
+/* ===================== CONFIG ===================== */
+var SUPABASE_URL = 'https://jrkvfiomntkepxkkwecc.supabase.co';
+var SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Impya3ZmaW9tbnRrZXB4a2t3ZWNjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE4ODk4MDgsImV4cCI6MjA5NzQ2NTgwOH0.ul1EPxNxxZzAvhtFm30DiMWMVkwc1RmBJbtoqqIcUkQ';
+var COMMUNE_NOM = 'Prignac-et-Marcamps';
+var sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+/* ===================== STATE ===================== */
+var currentUser = null, profile = null, profiles = {}; // profiles[id] = {prenom,is_admin,approved}
+var map, meMarker, watchId, communeGeom = null, wasInside = null;
+var userMarkers = {}, userLines = {}, userPositions = {}; // per user_id
+var poiMarkers = {}, poisCache = {};
+var pendingLatLng = null;
+var calMonth = new Date(); calMonth.setDate(1);
+var resaCache = {}; // 'YYYY-MM-DD' -> {matin:{prenom,user_id,id}, journee:.., soir:..}
+var COLORS = ['#2f6d3a','#c0392b','#2563eb','#d97706','#7c3aed','#0891b2','#be185d','#65a30d'];
+
+function colorFor(uid){
+  if(!colorFor._m) colorFor._m = {};
+  if(!colorFor._m[uid]){
+    var n = Object.keys(colorFor._m).length;
+    colorFor._m[uid] = COLORS[n % COLORS.length];
+  }
+  return colorFor._m[uid];
+}
+
+function toast(msg){
+  var t = document.createElement('div');
+  t.className = 'toast'; t.textContent = msg;
+  document.body.appendChild(t);
+  setTimeout(function(){ t.remove(); }, 2600);
+}
+
+/* ===================== AUTH UI ===================== */
+function setAuthTab(t){
+  document.getElementById('tab-login').classList.toggle('active', t==='login');
+  document.getElementById('tab-signup').classList.toggle('active', t==='signup');
+  document.getElementById('form-login').classList.toggle('hidden', t!=='login');
+  document.getElementById('form-signup').classList.toggle('hidden', t!=='signup');
+  document.getElementById('auth-msg').innerHTML = '';
+}
+function showAuthMsg(text, ok){
+  document.getElementById('auth-msg').innerHTML = '<div class="msg '+(ok?'ok':'err')+'">'+text+'</div>';
+}
+
+async function doSignup(){
+  var prenom = document.getElementById('signup-prenom').value.trim();
+  var email = document.getElementById('signup-email').value.trim();
+  var pass = document.getElementById('signup-pass').value;
+  if(!prenom || !email || pass.length < 6){ showAuthMsg('Remplis tous les champs (mot de passe 6 caractères min).'); return; }
+  var { data, error } = await sb.auth.signUp({ email: email, password: pass, options: { data: { prenom: prenom } } });
+  if(error){ showAuthMsg(error.message); return; }
+  showAuthMsg('Compte créé ! Si une confirmation par email est activée, vérifie ta boîte mail, puis connecte-toi. Un administrateur doit ensuite valider ton compte.', true);
+  setAuthTab('login');
+}
+
+async function doLogin(){
+  var email = document.getElementById('login-email').value.trim();
+  var pass = document.getElementById('login-pass').value;
+  if(!email || !pass){ showAuthMsg('Email et mot de passe requis.'); return; }
+  var { data, error } = await sb.auth.signInWithPassword({ email: email, password: pass });
+  if(error){ showAuthMsg(error.message); return; }
+}
+
+async function doLogout(){
+  if(watchId) navigator.geolocation.clearWatch(watchId);
+  await sb.auth.signOut();
+  location.reload();
+}
+
+/* ===================== BOOT / SESSION ===================== */
+sb.auth.onAuthStateChange(function(event, session){
+  if(session && session.user){
+    currentUser = session.user;
+    loadProfileAndBoot();
+  } else {
+    currentUser = null;
+    document.getElementById('auth-screen').classList.remove('hidden');
+    document.getElementById('pending-screen').classList.add('hidden');
+    document.getElementById('main').classList.remove('on');
+  }
+});
+
+async function loadProfileAndBoot(){
+  var { data, error } = await sb.from('chasse_profiles').select('*').eq('id', currentUser.id).maybeSingle();
+  if(error || !data){
+    // le trigger d'inscription n'a peut-être pas encore tourné, on retente une fois
+    await new Promise(function(r){ setTimeout(r, 800); });
+    var r2 = await sb.from('chasse_profiles').select('*').eq('id', currentUser.id).maybeSingle();
+    data = r2.data;
+  }
+  profile = data;
+  if(!profile || !profile.approved){
+    document.getElementById('auth-screen').classList.add('hidden');
+    document.getElementById('main').classList.remove('on');
+    document.getElementById('pending-screen').classList.remove('hidden');
+    // vérifie périodiquement si validé entre-temps
+    setTimeout(async function(){
+      if(!currentUser) return;
+      var { data:p2 } = await sb.from('chasse_profiles').select('*').eq('id', currentUser.id).maybeSingle();
+      if(p2 && p2.approved){ profile = p2; bootApp(); }
+    }, 8000);
+    return;
+  }
+  bootApp();
+}
+
+function bootApp(){
+  document.getElementById('auth-screen').classList.add('hidden');
+  document.getElementById('pending-screen').classList.add('hidden');
+  document.getElementById('main').classList.add('on');
+  if(profile.is_admin) document.getElementById('tab-btn-admin').classList.remove('hidden');
+  initMap();
+  loadCommuneBoundary();
+  startGPS();
+  loadAllProfiles();
+  loadTodayPositions();
+  subscribePositions();
+  loadPois();
+  subscribePois();
+  renderCalendar();
+  subscribeReservations();
+  if(profile.is_admin) loadAdmin();
+  subscribeProfiles();
+}
+
+/* ===================== TABS ===================== */
+function setTab(t){
+  document.querySelectorAll('#navrail button').forEach(function(b){ b.classList.toggle('active', b.dataset.tab===t); });
+  document.querySelectorAll('.view').forEach(function(v){ v.classList.remove('on'); });
+  document.getElementById('view-'+t).classList.add('on');
+  var titles = {map:'Carte', poi:"Points d'intérêt", resa:'Réservation pilône', admin:'Administration'};
+  document.getElementById('hdr-title').textContent = titles[t];
+  if(t==='map' && map) setTimeout(function(){ map.invalidateSize(); }, 100);
+  if(t==='admin') loadAdmin();
+}
+
+/* ===================== CARTE ===================== */
+var osmLayer, satLayer, baseLayer = 'osm';
+function initMap(){
+  map = L.map('map', { zoomControl:false }).setView([44.977, -0.421], 14);
+  osmLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom:19, attribution:'© OpenStreetMap' });
+  satLayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { maxZoom:19, attribution:'Tiles © Esri' });
+  osmLayer.addTo(map);
+  L.control.zoom({ position:'topright' }).addTo(map);
+  meMarker = L.circleMarker([44.977,-0.421], { radius:9, color:'#fff', weight:2, fillColor:'#2f6d3a', fillOpacity:1 }).addTo(map);
+  meMarker.bindTooltip(profile ? (profile.prenom + ' (moi)') : 'Moi', { permanent:false });
+  map.on('click', function(e){ if(!freeMode) openPoiModal(e.latlng); });
+  registerTileCache();
+}
+
+function toggleSatellite(){
+  var btn = document.getElementById('btn-sat');
+  if(baseLayer === 'osm'){
+    map.removeLayer(osmLayer); satLayer.addTo(map); baseLayer = 'sat';
+    btn.classList.add('on');
+  } else {
+    map.removeLayer(satLayer); osmLayer.addTo(map); baseLayer = 'osm';
+    btn.classList.remove('on');
+  }
+}
+
+var freeMode = false;
+function startFreePlacement(){
+  freeMode = true;
+  document.getElementById('crosshair').classList.add('on');
+  document.getElementById('free-confirm').classList.add('on');
+  document.getElementById('btn-free').classList.add('on');
+}
+function exitFreePlacement(){
+  freeMode = false;
+  document.getElementById('crosshair').classList.remove('on');
+  document.getElementById('free-confirm').classList.remove('on');
+  document.getElementById('btn-free').classList.remove('on');
+}
+function cancelFreePlacement(){ exitFreePlacement(); }
+function confirmFreePlacement(){
+  var c = map.getCenter();
+  exitFreePlacement();
+  openPoiModal(c);
+}
+
+function registerTileCache(){
+  if('serviceWorker' in navigator){
+    navigator.serviceWorker.register('sw.js').catch(function(e){ console.log('cache tuiles indisponible', e); });
+  }
+}
+
+async function loadCommuneBoundary(){
+  try{
+    var url = 'https://geo.api.gouv.fr/communes?nom=' + encodeURIComponent(COMMUNE_NOM) + '&fields=contour,centre&format=geojson&geometry=contour';
+    var res = await fetch(url);
+    var geo = await res.json();
+    if(geo.features && geo.features.length){
+      communeGeom = geo.features[0].geometry;
+      addCommuneMask(communeGeom);
+      L.geoJSON(geo, { style:{ color:'#c0392b', weight:3, fillOpacity:0 } }).addTo(map);
+      map.fitBounds(L.geoJSON(geo).getBounds(), { padding:[20,20] });
+    }
+  }catch(e){ console.error('boundary', e); }
+}
+
+// masque noir qui ne laisse apparaître que la commune (trou dans un grand rectangle)
+function addCommuneMask(geom){
+  var world = [[85,-179],[85,179],[-85,179],[-85,-179]];
+  var holes = [];
+  var polys = geom.type === 'Polygon' ? [geom.coordinates] : geom.coordinates;
+  polys.forEach(function(rings){
+    var exterior = rings[0].map(function(c){ return [c[1], c[0]]; }); // [lng,lat] -> [lat,lng]
+    holes.push(exterior);
+  });
+  L.polygon([world].concat(holes), {
+    stroke:false, fillColor:'#000', fillOpacity:0.85, interactive:false
+  }).addTo(map);
+}
+
+// ray-casting, gère Polygon et MultiPolygon
+function pointInPolygon(lat, lng, geom){
+  if(!geom) return true; // pas de limite chargée -> pas d'alerte
+  var polys = geom.type === 'Polygon' ? [geom.coordinates] : geom.coordinates;
+  for(var p=0; p<polys.length; p++){
+    var rings = polys[p];
+    var ring = rings[0]; // anneau extérieur
+    var inside = false;
+    for(var i=0, j=ring.length-1; i<ring.length; j=i++){
+      var xi = ring[i][0], yi = ring[i][1];
+      var xj = ring[j][0], yj = ring[j][1];
+      var intersect = ((yi>lat)!=(yj>lat)) && (lng < (xj-xi)*(lat-yi)/(yj-yi)+xi);
+      if(intersect) inside = !inside;
+    }
+    if(inside) return true;
+  }
+  return false;
+}
+
+function startGPS(){
+  if(!navigator.geolocation){ toast('GPS non disponible sur cet appareil'); return; }
+  watchId = navigator.geolocation.watchPosition(onPosition, function(err){ console.error(err); }, { enableHighAccuracy:true, maximumAge:5000, timeout:20000 });
+}
+
+var lastSave = 0;
+function onPosition(pos){
+  var lat = pos.coords.latitude, lng = pos.coords.longitude;
+  meMarker.setLatLng([lat,lng]);
+
+  var inside = pointInPolygon(lat, lng, communeGeom);
+  document.getElementById('hors-commune').classList.toggle('show', !inside);
+
+  // enregistre la position toutes les ~15s pour le suivi partagé
+  var now = Date.now();
+  if(now - lastSave > 15000){
+    lastSave = now;
+    sb.from('chasse_positions').insert({ user_id: currentUser.id, lat: lat, lng: lng }).then(function(){});
+  }
+}
+
+function upsertUserOnMap(uid, lat, lng, path){
+  var col = colorFor(uid);
+  var nom = (profiles[uid] && profiles[uid].prenom) || 'Chasseur';
+  if(uid !== currentUser.id){
+    if(!userMarkers[uid]){
+      userMarkers[uid] = L.circleMarker([lat,lng], { radius:8, color:'#fff', weight:2, fillColor:col, fillOpacity:1 }).addTo(map);
+      userMarkers[uid].bindTooltip(nom);
+    } else {
+      userMarkers[uid].setLatLng([lat,lng]);
+    }
+  }
+  if(path && path.length > 1){
+    if(userLines[uid]) map.removeLayer(userLines[uid]);
+    userLines[uid] = L.polyline(path, { color: col, weight:3, opacity:.7 }).addTo(map);
+  }
+}
+
+async function loadTodayPositions(){
+  var startOfDay = new Date(); startOfDay.setHours(0,0,0,0);
+  var { data, error } = await sb.from('chasse_positions').select('user_id,lat,lng,created_at').gte('created_at', startOfDay.toISOString()).order('created_at', { ascending:true });
+  if(error || !data) return;
+  var byUser = {};
+  data.forEach(function(r){
+    (byUser[r.user_id] = byUser[r.user_id] || []).push([r.lat, r.lng]);
+  });
+  Object.keys(byUser).forEach(function(uid){
+    var path = byUser[uid];
+    var last = path[path.length-1];
+    userPositions[uid] = last;
+    upsertUserOnMap(uid, last[0], last[1], path);
+  });
+}
+
+function subscribePositions(){
+  sb.channel('chasse_positions_rt')
+    .on('postgres_changes', { event:'INSERT', schema:'public', table:'chasse_positions' }, function(payload){
+      var r = payload.new;
+      var path = (upsertUserOnMap._paths = upsertUserOnMap._paths || {});
+      path[r.user_id] = path[r.user_id] || [];
+      path[r.user_id].push([r.lat, r.lng]);
+      userPositions[r.user_id] = [r.lat, r.lng];
+      upsertUserOnMap(r.user_id, r.lat, r.lng, path[r.user_id]);
+    })
+    .subscribe();
+}
+
+async function loadAllProfiles(){
+  var { data } = await sb.from('chasse_profiles').select('id,prenom,is_admin,approved');
+  (data||[]).forEach(function(p){ profiles[p.id] = p; });
+}
+function subscribeProfiles(){
+  sb.channel('chasse_profiles_rt')
+    .on('postgres_changes', { event:'*', schema:'public', table:'chasse_profiles' }, function(payload){
+      if(payload.new && payload.new.id) profiles[payload.new.id] = payload.new;
+      if(profile && payload.new && payload.new.id === currentUser.id) profile = payload.new;
+      if(document.getElementById('view-admin').classList.contains('on')) loadAdmin();
+    })
+    .subscribe();
+}
+
+/* ===================== POI ===================== */
+function openPoiModal(latlng){
+  pendingLatLng = latlng || meMarker.getLatLng();
+  var html = ''
+    +'<div class="modal-bg" onclick="if(event.target===this) closeModal()">'
+    +'<div class="modal">'
+    +'<h3>Nouveau POI</h3>'
+    +'<p style="color:var(--gris);font-size:12px;margin:0 0 8px">'+pendingLatLng.lat.toFixed(5)+', '+pendingLatLng.lng.toFixed(5)+'</p>'
+    +'<label>Nom du point</label>'
+    +'<input id="poi-label" placeholder="Ex: Passage sanglier, coulée...">'
+    +'<label>Note (optionnel)</label>'
+    +'<textarea id="poi-note" rows="2"></textarea>'
+    +'<label>Photo (optionnel)</label>'
+    +'<input id="poi-photo" type="file" accept="image/*" capture="environment">'
+    +'<div id="poi-photo-preview"></div>'
+    +'<label>Visibilité</label>'
+    +'<div class="radio-row">'
+    +'<label><input type="radio" name="poi-vis" value="prive" checked> Privé (moi)</label>'
+    +'<label><input type="radio" name="poi-vis" value="public"> Tous les inscrits</label>'
+    +'</div>'
+    +'<div class="modal-actions">'
+    +'<button class="btn-cancel" onclick="closeModal()">Annuler</button>'
+    +'<button class="btn-primary" style="margin-top:0" id="poi-save-btn" onclick="savePoi()">Enregistrer</button>'
+    +'</div></div></div>';
+  document.body.insertAdjacentHTML('beforeend', html);
+  document.getElementById('poi-photo').addEventListener('change', function(e){
+    var f = e.target.files[0];
+    var prev = document.getElementById('poi-photo-preview');
+    if(!f){ prev.innerHTML=''; return; }
+    prev.innerHTML = '<img src="'+URL.createObjectURL(f)+'" style="width:100%;border-radius:10px;margin-top:8px;max-height:180px;object-fit:cover">';
+  });
+}
+function closeModal(){
+  document.querySelectorAll('.modal-bg').forEach(function(m){ m.remove(); });
+}
+async function savePoi(){
+  var label = document.getElementById('poi-label').value.trim();
+  if(!label){ toast('Donne un nom au point'); return; }
+  var note = document.getElementById('poi-note').value.trim();
+  var vis = document.querySelector('input[name="poi-vis"]:checked').value;
+  var fileInput = document.getElementById('poi-photo');
+  var file = fileInput.files[0];
+  var btn = document.getElementById('poi-save-btn');
+  btn.disabled = true; btn.textContent = 'Enregistrement...';
+
+  var photoUrl = null;
+  if(file){
+    var path = currentUser.id + '/' + Date.now() + '_' + file.name.replace(/[^a-zA-Z0-9._-]/g,'_');
+    var up = await sb.storage.from('chasse-photos').upload(path, file, { upsert:false });
+    if(up.error){
+      toast('Photo non envoyée: '+up.error.message);
+    } else {
+      photoUrl = sb.storage.from('chasse-photos').getPublicUrl(path).data.publicUrl;
+    }
+  }
+
+  var { error } = await sb.from('chasse_poi').insert({
+    user_id: currentUser.id, lat: pendingLatLng.lat, lng: pendingLatLng.lng,
+    label: label, note: note || null, visibility: vis, photo_url: photoUrl
+  });
+  if(error){ toast('Erreur: '+error.message); btn.disabled=false; btn.textContent='Enregistrer'; return; }
+  closeModal();
+  toast('POI enregistré');
+}
+function navLinksHtml(lat,lng){
+  var waze = 'https://waze.com/ul?ll='+lat+','+lng+'&navigate=yes';
+  var gmaps = 'https://www.google.com/maps/dir/?api=1&destination='+lat+','+lng;
+  var sview = 'https://www.google.com/maps/@?api=1&map_action=pano&viewpoint='+lat+','+lng;
+  return '<div style="display:flex;gap:5px;margin-top:8px">'
+    +'<a href="'+gmaps+'" target="_blank" rel="noopener" style="flex:1;text-align:center;background:#4285F4;color:#fff;border-radius:7px;padding:6px 3px;font-size:10px;font-weight:700;text-decoration:none">📍 Maps</a>'
+    +'<a href="'+waze+'" target="_blank" rel="noopener" style="flex:1;text-align:center;background:#05C8F7;color:#fff;border-radius:7px;padding:6px 3px;font-size:10px;font-weight:700;text-decoration:none">🚗 Waze</a>'
+    +'<a href="'+sview+'" target="_blank" rel="noopener" style="flex:1;text-align:center;background:#34A853;color:#fff;border-radius:7px;padding:6px 3px;font-size:10px;font-weight:700;text-decoration:none">👁️ Street</a>'
+    +'</div>';
+}
+function renderPoiOnMap(p){
+  if(poiMarkers[p.id]) map.removeLayer(poiMarkers[p.id]);
+  var mine = p.user_id === currentUser.id;
+  var col = p.visibility==='public' ? '#d97706' : '#6b7280';
+  var m = L.marker([p.lat,p.lng], { icon: L.divIcon({ className:'', html:'<div style="width:22px;height:22px;border-radius:50% 50% 50% 0;transform:rotate(-45deg);background:'+col+';border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.4)"></div>', iconSize:[22,22], iconAnchor:[11,22] }) }).addTo(map);
+  var popupHtml = '<div style="min-width:180px">'
+    +'<b>'+escapeHtml(p.label)+'</b>'+(p.note?'<br>'+escapeHtml(p.note):'')
+    +(p.photo_url ? '<br><img src="'+p.photo_url+'" style="width:100%;border-radius:8px;margin-top:6px;max-height:140px;object-fit:cover">' : '')
+    +'<br><small>'+(p.visibility==='public'?'Public':'Privé')+(mine?' · à moi':'')+'</small>'
+    + navLinksHtml(p.lat,p.lng)
+    +'</div>';
+  m.bindPopup(popupHtml, { maxWidth:220 });
+  poiMarkers[p.id] = m;
+}
+function escapeHtml(s){ return (s||'').replace(/[&<>"']/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
+
+async function loadPois(){
+  var { data, error } = await sb.from('chasse_poi').select('*').order('created_at', { ascending:false });
+  if(error || !data) return;
+  data.forEach(function(p){ poisCache[p.id] = p; renderPoiOnMap(p); });
+  renderPoiList();
+}
+function subscribePois(){
+  sb.channel('chasse_poi_rt')
+    .on('postgres_changes', { event:'INSERT', schema:'public', table:'chasse_poi' }, function(payload){
+      poisCache[payload.new.id] = payload.new; renderPoiOnMap(payload.new); renderPoiList();
+    })
+    .on('postgres_changes', { event:'DELETE', schema:'public', table:'chasse_poi' }, function(payload){
+      var id = payload.old.id;
+      if(poiMarkers[id]){ map.removeLayer(poiMarkers[id]); delete poiMarkers[id]; }
+      delete poisCache[id]; renderPoiList();
+    })
+    .subscribe();
+}
+function renderPoiList(){
+  var list = Object.values(poisCache).sort(function(a,b){ return new Date(b.created_at)-new Date(a.created_at); });
+  var mine = list.filter(function(p){ return p.user_id === currentUser.id && p.visibility === 'prive'; });
+  var pub = list.filter(function(p){ return p.visibility === 'public'; });
+  document.getElementById('poi-list-prive').innerHTML = renderPoiCards(mine, 'Aucun POI privé pour l\'instant');
+  document.getElementById('poi-list-public').innerHTML = renderPoiCards(pub, 'Aucun POI partagé pour l\'instant');
+}
+function renderPoiCards(list, emptyMsg){
+  if(!list.length) return '<div class="empty">'+emptyMsg+'</div>';
+  return list.map(function(p){
+    var mine = p.user_id === currentUser.id;
+    var canDelete = mine || (profile && profile.is_admin);
+    return '<div class="card">'
+      +(p.photo_url ? '<img src="'+p.photo_url+'" style="width:100%;border-radius:8px;margin-bottom:8px;max-height:160px;object-fit:cover">' : '')
+      +'<div class="row1"><div>'
+      +'<div style="font-weight:700">'+escapeHtml(p.label)+'</div>'
+      +(p.note ? '<div style="font-size:12px;color:var(--gris);margin-top:2px">'+escapeHtml(p.note)+'</div>' : '')
+      +'<span class="badge '+p.visibility+'" style="margin-top:6px;display:inline-block">'+(p.visibility==='public'?'Public':'Privé')+'</span>'
+      +'</div>'
+      +(canDelete ? '<button class="small-btn danger" onclick="deletePoi('+p.id+')">Suppr.</button>' : '')
+      +'</div>'
+      + navLinksHtml(p.lat, p.lng)
+      +'</div>';
+  }).join('');
+}
+async function deletePoi(id){
+  if(!confirm('Supprimer ce POI ?')) return;
+  await sb.from('chasse_poi').delete().eq('id', id);
+}
+
+/* ===================== RESERVATIONS PILÔNE ===================== */
+var SLOT_LABELS = { matin:'Matinée', journee:'Journée', soir:'Soirée' };
+var MOIS_FR = ['janvier','février','mars','avril','mai','juin','juillet','août','septembre','octobre','novembre','décembre'];
+var DOW_FR = ['L','M','M','J','V','S','D'];
+
+function calShift(dir){
+  calMonth.setMonth(calMonth.getMonth()+dir);
+  renderCalendar();
+}
+
+async function renderCalendar(){
+  document.getElementById('cal-title').textContent = MOIS_FR[calMonth.getMonth()] + ' ' + calMonth.getFullYear();
+  var y = calMonth.getFullYear(), m = calMonth.getMonth();
+  var first = new Date(y,m,1), last = new Date(y,m+1,0);
+  var startStr = first.toISOString().slice(0,10), endStr = last.toISOString().slice(0,10);
+
+  var { data } = await sb.from('chasse_reservations').select('*').gte('date', startStr).lte('date', endStr);
+  resaCache = {};
+  (data||[]).forEach(function(r){
+    resaCache[r.date] = resaCache[r.date] || {};
+    resaCache[r.date][r.creneau] = r;
+  });
+
+  var grid = document.getElementById('cal-grid');
+  var html = DOW_FR.map(function(d){ return '<div class="cal-dow">'+d+'</div>'; }).join('');
+  var firstDow = (first.getDay()+6)%7; // lundi=0
+  for(var i=0;i<firstDow;i++) html += '<div class="cal-day out"></div>';
+  var todayStr = new Date().toISOString().slice(0,10);
+  for(var d=1; d<=last.getDate(); d++){
+    var dateObj = new Date(y,m,d);
+    var dateStr = dateObj.toISOString().slice(0,10);
+    var res = resaCache[dateStr] || {};
+    var count = Object.keys(res).length;
+    var stateClass = count === 3 ? 'full' : (count > 0 ? 'partial' : '');
+    html += '<div class="cal-day'+(dateStr===todayStr?' today':'')+(stateClass?' '+stateClass:'')+'" onclick="openDayModal(\''+dateStr+'\')">'+d
+      + (count ? '<div class="count">'+count+'/3</div>' : '')
+      + '</div>';
+  }
+  grid.innerHTML = html;
+}
+
+function openDayModal(dateStr){
+  var res = resaCache[dateStr] || {};
+  var d = new Date(dateStr+'T00:00:00');
+  var dTxt = d.toLocaleDateString('fr-FR', { weekday:'long', day:'numeric', month:'long' });
+  var slotsHtml = ['matin','journee','soir'].map(function(s){
+    var r = res[s];
+    if(r){
+      var mine = r.user_id === currentUser.id;
+      return '<div class="slot-btn taken" onclick="'+(mine||profile.is_admin? 'cancelResa('+r.id+',\''+dateStr+'\')':'')+'">'
+        + SLOT_LABELS[s] + ' — réservé par ' + escapeHtml(r.prenom) + (mine? ' (moi, appuyer pour annuler)':'') + '</div>';
+    }
+    return '<button class="slot-btn free" onclick="reserveSlot(\''+dateStr+'\',\''+s+'\')">'+SLOT_LABELS[s]+' — libre</button>';
+  }).join('');
+  var html = '<div class="modal-bg center" onclick="if(event.target===this) closeModal()">'
+    +'<div class="modal"><h3 style="text-transform:capitalize">'+dTxt+'</h3>'
+    +'<p style="color:var(--gris);font-size:12px;margin:0 0 12px">Pilône — choisir un créneau</p>'
+    + slotsHtml
+    +'<div class="modal-actions"><button class="btn-cancel" onclick="closeModal()">Fermer</button></div>'
+    +'</div></div>';
+  closeModal();
+  document.body.insertAdjacentHTML('beforeend', html);
+}
+
+function reserveSlot(dateStr, slot){
+  var prenom = prompt('Ton prénom pour la réservation :', (profile && profile.prenom) || '');
+  if(!prenom || !prenom.trim()) return;
+  sb.from('chasse_reservations').insert({ date: dateStr, creneau: slot, prenom: prenom.trim(), user_id: currentUser.id })
+    .then(function(res){
+      if(res.error){
+        toast(res.error.code === '23505' ? 'Ce créneau vient d\'être réservé' : 'Erreur: '+res.error.message);
+      } else {
+        toast('Créneau réservé');
+      }
+      closeModal();
+      renderCalendar();
+    });
+}
+async function cancelResa(id, dateStr){
+  if(!confirm('Annuler cette réservation ?')) return;
+  await sb.from('chasse_reservations').delete().eq('id', id);
+  closeModal();
+  renderCalendar();
+}
+function subscribeReservations(){
+  sb.channel('chasse_resa_rt')
+    .on('postgres_changes', { event:'*', schema:'public', table:'chasse_reservations' }, function(){ renderCalendar(); })
+    .subscribe();
+}
+
+/* ===================== ADMIN ===================== */
+async function loadAdmin(){
+  var { data } = await sb.from('chasse_profiles').select('*').order('created_at', { ascending:true });
+  data = data || [];
+  var pending = data.filter(function(p){ return !p.approved; });
+  var approved = data.filter(function(p){ return p.approved; });
+
+  document.getElementById('admin-pending').innerHTML = pending.length ? pending.map(function(p){
+    return '<div class="card"><div class="row1"><div><div style="font-weight:700">'+escapeHtml(p.prenom||'(sans prénom)')+'</div>'
+      +'<div style="font-size:12px;color:var(--gris)">'+escapeHtml(p.email||'')+'</div></div>'
+      +'<button class="small-btn" style="background:var(--vert-l);color:var(--vert-d)" onclick="approveUser(\''+p.id+'\')">Valider</button>'
+      +'</div></div>';
+  }).join('') : '<div class="empty">Aucune demande en attente</div>';
+
+  document.getElementById('admin-approved').innerHTML = approved.map(function(p){
+    var self = p.id === currentUser.id;
+    return '<div class="card"><div class="row1"><div><div style="font-weight:700">'+escapeHtml(p.prenom||'(sans prénom)')+(p.is_admin?' <span class="badge public">admin</span>':'')+'</div>'
+      +'<div style="font-size:12px;color:var(--gris)">'+escapeHtml(p.email||'')+'</div></div>'
+      +(self ? '' : '<button class="small-btn" onclick="toggleAdmin(\''+p.id+'\','+(!p.is_admin)+')">'+(p.is_admin?'Retirer admin':'Rendre admin')+'</button>')
+      +'</div></div>';
+  }).join('');
+}
+async function approveUser(id){
+  var { error } = await sb.from('chasse_profiles').update({ approved:true }).eq('id', id);
+  if(error) toast('Erreur: '+error.message); else { toast('Chasseur validé'); loadAdmin(); }
+}
+async function toggleAdmin(id, val){
+  var { error } = await sb.from('chasse_profiles').update({ is_admin: val }).eq('id', id);
+  if(error) toast('Erreur: '+error.message); else { toast(val?'Promu admin':'Droits admin retirés'); loadAdmin(); }
+}
+</script>
+</body>
+</html>
