@@ -615,11 +615,12 @@ async function savePoi(){
     }
   }
 
-  var { error } = await sb.from('chasse_poi').insert({
+  var { data, error } = await sb.from('chasse_poi').insert({
     user_id: currentUser.id, lat: pendingLatLng.lat, lng: pendingLatLng.lng,
     label: label, note: note || null, visibility: vis, photo_url: photoUrl
-  });
+  }).select().single();
   if(error){ toast('Erreur: '+error.message); btn.disabled=false; btn.textContent='Enregistrer'; return; }
+  if(data){ poisCache[data.id] = data; renderPoiOnMap(data); renderPoiList(); }
   closeModal();
   toast('POI enregistré');
 }
@@ -694,7 +695,11 @@ function renderPoiCards(list, emptyMsg){
 }
 async function deletePoi(id){
   if(!confirm('Supprimer ce POI ?')) return;
-  await sb.from('chasse_poi').delete().eq('id', id);
+  var { error } = await sb.from('chasse_poi').delete().eq('id', id);
+  if(error){ toast('Erreur: '+error.message); return; }
+  if(poiMarkers[id]){ map.removeLayer(poiMarkers[id]); delete poiMarkers[id]; }
+  delete poisCache[id];
+  renderPoiList();
 }
 
 /* ===================== RESERVATIONS PILÔNE ===================== */
