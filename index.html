@@ -206,7 +206,6 @@
       </div>
       <div class="layers-menu" id="layers-menu">
         <button onclick="toggleZonesChasse()" id="btn-zonemap">🗺️ Superficie chassable</button>
-        <button onclick="toggleZone150()" id="btn-150">🏠 Zone 150m</button>
       </div>
       <div class="fab-poi">
         <button onclick="openPoiModal(null)" title="POI à ma position">📍</button>
@@ -272,7 +271,8 @@ var sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 /* ===================== STATE ===================== */
 var currentUser = null, profile = null, profiles = {}; // profiles[id] = {prenom,is_admin,approved}
 var map, meMarker, watchId, communeGeom = null, wasInside = null;
-var userMarkers = {}, userLines = {}, userPositions = {}; // per user_id
+var userMarkers = {}, userLines = {}, userPositions = {}, userLastSeen = {}; // per user_id
+var POSITION_STALE_MS = 45*60*1000; // un chasseur disparaît de la carte 45 min après sa dernière position
 var poiMarkers = {}, poisCache = {};
 var pendingLatLng = null;
 var calMonth = new Date(); calMonth.setDate(1);
@@ -567,62 +567,6 @@ function toggleZonesChasse(){
 }
 
 /* ===================== ZONE INDICATIVE DES 150m ===================== */
-// Approximation à partir des bâtiments OpenStreetMap : un cercle de 150m autour du
-// centre de chaque bâtiment. C'est indicatif (dépend de la complétude d'OSM et
-// simplifie la règle légale), pas une référence officielle pour le respect de la
-// distance de sécurité de tir près des habitations.
-var zone150Group = null, zone150Loaded = false, zone150Visible = false, zone150Loading = false;
-var OVERPASS_MIRRORS = [
-  'https://overpass-api.de/api/interpreter',
-  'https://overpass.kumi.systems/api/interpreter',
-  'https://lz4.overpass-api.de/api/interpreter'
-];
-async function loadZone150(){
-  if(zone150Loaded || zone150Loading || !communeBounds) return;
-  zone150Loading = true;
-  toast('Chargement des bâtiments (zone 150 m)...');
-  try{
-    var s = communeBounds.getSouth(), w = communeBounds.getWest(), n = communeBounds.getNorth(), e = communeBounds.getEast();
-    var bbox = s+','+w+','+n+','+e;
-    var query = '[out:json][timeout:25];(way["building"]('+bbox+');node["building"]('+bbox+'););out center;';
-    var data = null, lastErr = null;
-    for(var i=0;i<OVERPASS_MIRRORS.length;i++){
-      try{
-        var res = await fetch(OVERPASS_MIRRORS[i], { method:'POST', body:'data='+encodeURIComponent(query) });
-        if(!res.ok) throw new Error('HTTP '+res.status);
-        var text = await res.text();
-        data = JSON.parse(text); // certains miroirs renvoient une page d'erreur HTML -> JSON.parse échoue, on tente le miroir suivant
-        break;
-      }catch(err){ lastErr = err; console.error('overpass mirror', OVERPASS_MIRRORS[i], err); }
-    }
-    if(!data) throw lastErr || new Error('tous les miroirs Overpass ont échoué');
-    zone150Group = L.layerGroup();
-    (data.elements||[]).forEach(function(el){
-      var lat = el.type === 'node' ? el.lat : (el.center && el.center.lat);
-      var lon = el.type === 'node' ? el.lon : (el.center && el.center.lon);
-      if(lat == null || lon == null) return;
-      L.circle([lat,lon], { radius:150, color:'transparent', fillColor:'#c0392b', fillOpacity:0.15, weight:0, interactive:false }).addTo(zone150Group);
-    });
-    zone150Loaded = true;
-  }catch(e){
-    console.error('zone150', e);
-    toast('Impossible de charger les bâtiments (serveur Overpass surchargé, réessaie plus tard)');
-  }
-  zone150Loading = false;
-}
-async function toggleZone150(){
-  var btn = document.getElementById('btn-150');
-  if(zone150Visible){
-    if(zone150Group) map.removeLayer(zone150Group);
-    zone150Visible = false; btn.classList.remove('on');
-    return;
-  }
-  if(!zone150Loaded) await loadZone150();
-  if(zone150Group){
-    zone150Group.addTo(map); zone150Visible = true; btn.classList.add('on');
-    toast('Zone des 150m (indicative, basée sur OpenStreetMap)');
-  }
-}
 
 // ray-casting, gère Polygon et MultiPolygon
 function pointInPolygon(lat, lng, geom){
@@ -684,7 +628,27 @@ function onPosition(pos){
   }
 }
 
-function upsertUserOnMap(uid, lat, lng, path){
+function removeUserFromMap(uid){
+  if(userMarkers[uid]){ map.removeLayer(userMarkers[uid]); delete userMarkers[uid]; }
+  if(userLines[uid]){ map.removeLayer(userLines[uid]); delete userLines[uid]; }
+  delete userPositions[uid];
+  delete userLastSeen[uid];
+  if(upsertUserOnMap._paths) delete upsertUserOnMap._paths[uid];
+}
+function sweepStalePositions(){
+  var now = Date.now();
+  Object.keys(userLastSeen).forEach(function(uid){
+    if(now - userLastSeen[uid] > POSITION_STALE_MS) removeUserFromMap(uid);
+  });
+}
+setInterval(sweepStalePositions, 60000);
+
+function upsertUserOnMap(uid, lat, lng, path, lastSeenMs){
+  if(lastSeenMs != null) userLastSeen[uid] = lastSeenMs;
+  if(lastSeenMs != null && Date.now() - lastSeenMs > POSITION_STALE_MS){
+    removeUserFromMap(uid);
+    return;
+  }
   var col = colorFor(uid);
   var p = profiles[uid];
   var fullName = p ? [p.prenom, p.nom].filter(Boolean).join(' ') : '';
@@ -715,15 +679,16 @@ async function loadTodayPositions(){
   var startOfDay = new Date(); startOfDay.setHours(0,0,0,0);
   var { data, error } = await sb.from('chasse_positions').select('user_id,lat,lng,created_at').gte('created_at', startOfDay.toISOString()).order('created_at', { ascending:true });
   if(error || !data) return;
-  var byUser = {};
+  var byUser = {}, lastSeen = {};
   data.forEach(function(r){
     (byUser[r.user_id] = byUser[r.user_id] || []).push([r.lat, r.lng]);
+    lastSeen[r.user_id] = new Date(r.created_at).getTime();
   });
   Object.keys(byUser).forEach(function(uid){
     var path = byUser[uid];
     var last = path[path.length-1];
     userPositions[uid] = last;
-    upsertUserOnMap(uid, last[0], last[1], path);
+    upsertUserOnMap(uid, last[0], last[1], path, lastSeen[uid]);
   });
 }
 
@@ -735,7 +700,7 @@ function subscribePositions(){
       path[r.user_id] = path[r.user_id] || [];
       path[r.user_id].push([r.lat, r.lng]);
       userPositions[r.user_id] = [r.lat, r.lng];
-      upsertUserOnMap(r.user_id, r.lat, r.lng, path[r.user_id]);
+      upsertUserOnMap(r.user_id, r.lat, r.lng, path[r.user_id], new Date(r.created_at).getTime());
     })
     .on('postgres_changes', { event:'DELETE', schema:'public', table:'chasse_positions' }, function(payload){
       if(payload.old && payload.old.user_id) refreshUserTrack(payload.old.user_id);
@@ -748,15 +713,14 @@ async function refreshUserTrack(uid){
   var { data } = await sb.from('chasse_positions').select('lat,lng,created_at').eq('user_id', uid).gte('created_at', startOfDay.toISOString()).order('created_at', { ascending:true });
   var path = (upsertUserOnMap._paths = upsertUserOnMap._paths || {});
   if(!data || !data.length){
-    if(userMarkers[uid]){ map.removeLayer(userMarkers[uid]); delete userMarkers[uid]; }
-    if(userLines[uid]){ map.removeLayer(userLines[uid]); delete userLines[uid]; }
+    removeUserFromMap(uid);
     delete path[uid];
     return;
   }
   var pts = data.map(function(p){ return [p.lat, p.lng]; });
   path[uid] = pts;
   var last = pts[pts.length-1];
-  upsertUserOnMap(uid, last[0], last[1], pts);
+  upsertUserOnMap(uid, last[0], last[1], pts, new Date(data[data.length-1].created_at).getTime());
 }
 
 async function loadAllProfiles(){
