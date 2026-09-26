@@ -491,37 +491,25 @@ function addCommuneMask(geom){
 }
 
 /* ===================== ZONES CHASSE (Superficie chassable) =====================
-   v11 (confirmée par Sébastien comme LA bonne source) : on repasse directement sur
-   les VRAIS traits d'encre de sa carte papier : détection des pixels sombres
-   (hachures + ligne de contour), texte hors-zone retiré et reconstruit, traits
-   recolorés en vert (zone chassable = autorisée, pas interdite), légèrement
-   épaissis et cerclés d'un fin liseré sombre pour rester bien visibles quelle que
-   soit la couleur du sol en dessous (vue satellite).
-   (Une tentative v12 a essayé de prendre la couche "Territoires chassables" de la
-   carte officielle de la FDC33 à la place — techniquement bien géoréférencée, mais
-   Sébastien a confirmé sur le terrain que ça ne correspondait pas à la réalité :
-   la couche fédération marque tout comme chassable par défaut, alors que la carte
-   papier reflète les vraies zones. On repart donc sur la carte papier.)
-   Calage v11 (fiable, vérifié) : Sébastien a fourni deux images à la même échelle et cadrage exacts
-   (une capture de l'appli avec le vrai contour officiel + une extraction précise des zones
-   chassables). Le contour officiel (rouge) de cette capture a été comparé point par point au
-   contour geo.api.gouv.fr : correspondance quasi parfaite sans aucune rotation, seulement une mise
-   à l'échelle simple. Cette même mise à l'échelle, vérifiée visuellement (superposition exacte),
-   a ensuite été appliquée à l'image des zones.
-   Nettoyage (carte-zones-v11-clean.png) : la carte papier source portait plusieurs ronds blancs à
-   bord noir (probablement des pastilles de correction/masquage collées sur le papier avant scan,
-   toutes du même diamètre — donc pas un vrai élément de terrain). Le traçage automatique des traits
-   sombres avait repris le contour de ces ronds et les avait recolorés en vert comme le reste des
-   hachures, ce qui donnait de faux petits anneaux verts flottants sans rapport avec une vraie
-   parcelle. Sébastien a nettoyé ces 3 anneaux (pixels rendus transparents, rien d'autre modifié) ;
-   c'est cette version propre qui est utilisée depuis. */
-var ZONES_IMG_BOUNDS = [[44.997430, -0.539864], [45.056222, -0.458013]];
+   v13 : passage en tracé VECTORIEL (fini l'image bitmap, qui pixelisait au zoom et
+   traînait des artefacts de scan). Le contour de la carte papier de Sébastien
+   (la vraie zone chassable, confirmée par lui) a été extrait comme silhouette
+   pleine (pas trait par trait comme avant, donc plus de trou là où il y avait du
+   texte, ni de pastilles de correction du papier reprises par erreur), simplifié
+   en un polygone propre à quelques dizaines de sommets, puis converti en
+   lat/lon avec le même calage vérifié bout en bout que les versions précédentes
+   (mise à l'échelle simple, sans rotation, comparée point par point au contour
+   officiel geo.api.gouv.fr). Résultat : des bords nets à n'importe quel niveau de
+   zoom, en vert plein (zone autorisée), jamais de rouge. */
+var ZONES_CHASSE_POLYGONS = [[[45.032944,-0.505538],[45.032641,-0.506024],[45.031589,-0.506225],[45.029364,-0.506339],[45.0272,-0.506368],[45.025319,-0.506683],[45.024713,-0.507685],[45.023964,-0.509002],[45.022609,-0.509173],[45.021092,-0.50883],[45.019636,-0.5084],[45.018827,-0.508544],[45.018018,-0.508687],[45.017169,-0.508171],[45.016178,-0.507799],[45.01545,-0.507427],[45.014742,-0.507742],[45.014297,-0.508429],[45.013589,-0.509145],[45.012962,-0.509746],[45.012295,-0.509861],[45.011607,-0.508658],[45.01098,-0.506797],[45.010171,-0.504278],[45.009746,-0.502818],[45.009524,-0.501587],[45.009666,-0.5009],[45.009787,-0.500098],[45.009504,-0.499067],[45.009079,-0.498294],[45.008371,-0.495718],[45.007987,-0.493513],[45.007926,-0.49128],[45.008432,-0.490793],[45.008958,-0.490135],[45.009585,-0.489505],[45.010232,-0.489104],[45.011344,-0.488245],[45.012194,-0.487158],[45.013731,-0.485125],[45.014883,-0.483865],[45.016562,-0.483837],[45.017412,-0.484924],[45.018504,-0.485898],[45.019252,-0.485554],[45.020021,-0.484409],[45.020364,-0.482978],[45.020283,-0.481575],[45.020142,-0.480458],[45.019919,-0.47897],[45.020041,-0.477309],[45.020405,-0.476107],[45.021092,-0.47582],[45.021881,-0.476107],[45.02271,-0.47688],[45.023782,-0.477538],[45.024753,-0.478311],[45.02536,-0.478683],[45.024955,-0.479886],[45.024328,-0.48126],[45.02354,-0.482434],[45.023034,-0.482634],[45.022205,-0.48252],[45.021254,-0.482978],[45.020546,-0.483808],[45.020304,-0.484982],[45.020567,-0.486012],[45.020991,-0.486785],[45.021901,-0.487186],[45.02267,-0.487215],[45.023337,-0.487616],[45.023641,-0.488331],[45.023924,-0.489591],[45.024308,-0.490593],[45.024531,-0.491423],[45.024996,-0.492139],[45.025238,-0.49317],[45.025481,-0.494315],[45.025683,-0.495517],[45.026108,-0.49629],[45.026856,-0.49672],[45.027584,-0.496376],[45.028333,-0.49566],[45.02894,-0.494945],[45.029587,-0.494086],[45.030113,-0.494],[45.030578,-0.494258],[45.03076,-0.495202],[45.030699,-0.496262],[45.030436,-0.497321],[45.030214,-0.498466],[45.030537,-0.499497],[45.030982,-0.500699],[45.031609,-0.50193],[45.032155,-0.502789],[45.03258,-0.50339],[45.032823,-0.503992],[45.033025,-0.504879]],[[45.051348,-0.47937],[45.051429,-0.4798],[45.051288,-0.480458],[45.051146,-0.481289],[45.051288,-0.482147],[45.051288,-0.483092],[45.050984,-0.48398],[45.049629,-0.485841],[45.048294,-0.487387],[45.046494,-0.489734],[45.045463,-0.491366],[45.044371,-0.493284],[45.043845,-0.49463],[45.0434,-0.495804],[45.043016,-0.497121],[45.042733,-0.498695],[45.042348,-0.499955],[45.041903,-0.501043],[45.041479,-0.501615],[45.041054,-0.502417],[45.040832,-0.503362],[45.040508,-0.504278],[45.040043,-0.50485],[45.039517,-0.50485],[45.03889,-0.504621],[45.038546,-0.504335],[45.038587,-0.504106],[45.039133,-0.503505],[45.039739,-0.502732],[45.039962,-0.501615],[45.040103,-0.499983],[45.040124,-0.498237],[45.040063,-0.496634],[45.040023,-0.496061],[45.040427,-0.495832],[45.041276,-0.495374],[45.041984,-0.494401],[45.042288,-0.49317],[45.042146,-0.492139],[45.041863,-0.490965],[45.041438,-0.489791],[45.041014,-0.488389],[45.040852,-0.487215],[45.040892,-0.485783],[45.041155,-0.484638],[45.041398,-0.483722],[45.041944,-0.482892],[45.042712,-0.482205],[45.043562,-0.481289],[45.044169,-0.480458],[45.044472,-0.479599],[45.044796,-0.479399],[45.045261,-0.479743],[45.04613,-0.480143],[45.047,-0.479829],[45.047769,-0.479428],[45.048638,-0.479027],[45.049427,-0.478769],[45.050317,-0.478769],[45.050903,-0.478884]]];
 
 var zonesOverlay = null, zonesVisible = false;
 function toggleZonesChasse(){
   var btn = document.getElementById('btn-zonemap');
   if(!zonesOverlay){
-    zonesOverlay = L.imageOverlay('carte-zones-v11-clean.png', ZONES_IMG_BOUNDS, { opacity:1, interactive:false });
+    zonesOverlay = L.layerGroup(ZONES_CHASSE_POLYGONS.map(function(ring){
+      return L.polygon(ring, { color:'#15803d', weight:2, fillColor:'#22c55e', fillOpacity:0.45, interactive:false });
+    }));
   }
   if(zonesVisible){
     map.removeLayer(zonesOverlay);
@@ -531,7 +519,7 @@ function toggleZonesChasse(){
     zonesOverlay.addTo(map);
     document.getElementById('zones-legend').classList.add('on');
     zonesVisible = true; btn.classList.add('on');
-    toast('Traits de la carte papier repassés en vert, superposés au fond de carte');
+    toast('Superficie chassable (tracé net) superposée au fond de carte');
   }
 }
 
