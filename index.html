@@ -517,6 +517,8 @@ var RotatedImageOverlay = L.Layer.extend({
       var img = this._image = document.createElement('img');
       img.src = this._url;
       img.style.position = 'absolute';
+      img.style.left = '0';
+      img.style.top = '0';
       img.style.transformOrigin = '0 0';
       img.style.pointerEvents = 'none';
       if(this.options.opacity != null) img.style.opacity = this.options.opacity;
