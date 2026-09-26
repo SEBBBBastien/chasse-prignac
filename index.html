@@ -205,7 +205,7 @@
         <button onclick="toggleLayersMenu()" title="Fonds de carte" id="btn-layers">🗂️</button>
       </div>
       <div class="layers-menu" id="layers-menu">
-        <button onclick="toggleZonesChasse()" id="btn-zonemap">🗺️ Zones (CPNC/RCFS/RRI)</button>
+        <button onclick="toggleZonesChasse()" id="btn-zonemap">🗺️ Superficie chassable</button>
         <button onclick="toggleZone150()" id="btn-150">🏠 Zone 150m</button>
       </div>
       <div class="fab-poi">
@@ -491,25 +491,25 @@ function addCommuneMask(geom){
 }
 
 /* ===================== ZONES CHASSE (Superficie chassable) =====================
-   v11 : au lieu de redessiner les zones (vectoriel) ou de poser toute la photo de la carte papier,
-   on repasse directement sur les VRAIS traits d'encre de la carte papier : détection des pixels
-   sombres (hachures + ligne de contour), texte hors-zone retiré, traits recolorés en vert (zone
-   chassable = autorisée, pas interdite), légèrement épaissis et cerclés d'un fin liseré sombre pour
-   rester bien visibles quelle que soit la couleur du sol en dessous (vue satellite).
-   Calage v11 (fiable, vérifié) : Sébastien a fourni deux images à la même échelle et cadrage exacts
-   (une capture de l'appli avec le vrai contour officiel + une extraction précise des zones
-   chassables). Le contour officiel (rouge) de cette capture a été comparé point par point au
-   contour geo.api.gouv.fr : correspondance quasi parfaite sans aucune rotation, seulement une mise
-   à l'échelle simple. Cette même mise à l'échelle, vérifiée visuellement (superposition exacte),
-   a ensuite été appliquée à l'image des zones. C'est la première fois que le calage est vérifié
-   de bout en bout plutôt que deviné. */
-var ZONES_IMG_BOUNDS = [[44.997430, -0.539864], [45.056222, -0.458013]];
+   v12 : fini le traçage à la main sur une photo de carte papier (et son calage
+   deviné). Cette couche vient directement du service cartographique officiel de la
+   Fédération des Chasseurs de la Gironde (FDC33, carte "Carte_FDC33"), interrogé en
+   direct (WMS GetMap) avec une bbox choisie par nous : l'image obtenue est donc
+   géoréférencée EXACTEMENT sur cette bbox, sans aucune calibration à deviner.
+   On a récupéré les couches officielles "Territoires chassables" (sous-catégories
+   ACCA / SC / CPC / CPNC / ENCLOS C / SANGLIER / OPCY) et "Réserves" (RCFS / RRI),
+   identifié les couleurs d'encre réelles de chaque sous-catégorie dans l'image, puis
+   calculé : zone chassable = commune (contour officiel geo.api.gouv.fr) MOINS les
+   réserves RCFS/RRI et les zones d'opposition OPCY (non-chassables par définition).
+   Sur Prignac-et-Marcamps, seules RCFS/RRI/OPCY sont présentes. Résultat rendu en
+   vert plein (zone autorisée) avec un liseré vert foncé, jamais de rouge. */
+var ZONES_IMG_BOUNDS = [[44.996559, -0.530759], [45.059176, -0.467368]];
 
 var zonesOverlay = null, zonesVisible = false;
 function toggleZonesChasse(){
   var btn = document.getElementById('btn-zonemap');
   if(!zonesOverlay){
-    zonesOverlay = L.imageOverlay('carte-zones-v11.png', ZONES_IMG_BOUNDS, { opacity:1, interactive:false });
+    zonesOverlay = L.imageOverlay('carte-zones-officielle.png', ZONES_IMG_BOUNDS, { opacity:1, interactive:false });
   }
   if(zonesVisible){
     map.removeLayer(zonesOverlay);
@@ -519,7 +519,7 @@ function toggleZonesChasse(){
     zonesOverlay.addTo(map);
     document.getElementById('zones-legend').classList.add('on');
     zonesVisible = true; btn.classList.add('on');
-    toast('Traits de la carte papier repassés en vert, superposés au fond de carte');
+    toast('Zones chassables officielles (FDC33) superposées au fond de carte');
   }
 }
 
