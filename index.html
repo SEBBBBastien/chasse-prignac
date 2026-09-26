@@ -519,7 +519,7 @@ var zonesOverlay = null, zonesVisible = false;
 function toggleZonesChasse(){
   var btn = document.getElementById('btn-zonemap');
   if(!zonesOverlay){
-    zonesOverlay = L.imageOverlay('carte-zones.jpg', ZONES_IMG_BOUNDS, { opacity:0.8, interactive:false });
+    zonesOverlay = L.imageOverlay('carte-zones-v3.png', ZONES_IMG_BOUNDS, { opacity:0.85, interactive:false });
   }
   if(zonesVisible){
     map.removeLayer(zonesOverlay);
