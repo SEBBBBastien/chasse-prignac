@@ -507,14 +507,21 @@ function addCommuneMask(geom){
    chassables). Le contour officiel (rouge) de cette capture a été comparé point par point au
    contour geo.api.gouv.fr : correspondance quasi parfaite sans aucune rotation, seulement une mise
    à l'échelle simple. Cette même mise à l'échelle, vérifiée visuellement (superposition exacte),
-   a ensuite été appliquée à l'image des zones. */
+   a ensuite été appliquée à l'image des zones.
+   Nettoyage (carte-zones-v11-clean.png) : la carte papier source portait plusieurs ronds blancs à
+   bord noir (probablement des pastilles de correction/masquage collées sur le papier avant scan,
+   toutes du même diamètre — donc pas un vrai élément de terrain). Le traçage automatique des traits
+   sombres avait repris le contour de ces ronds et les avait recolorés en vert comme le reste des
+   hachures, ce qui donnait de faux petits anneaux verts flottants sans rapport avec une vraie
+   parcelle. Sébastien a nettoyé ces 3 anneaux (pixels rendus transparents, rien d'autre modifié) ;
+   c'est cette version propre qui est utilisée depuis. */
 var ZONES_IMG_BOUNDS = [[44.997430, -0.539864], [45.056222, -0.458013]];
 
 var zonesOverlay = null, zonesVisible = false;
 function toggleZonesChasse(){
   var btn = document.getElementById('btn-zonemap');
   if(!zonesOverlay){
-    zonesOverlay = L.imageOverlay('carte-zones-v11.png', ZONES_IMG_BOUNDS, { opacity:1, interactive:false });
+    zonesOverlay = L.imageOverlay('carte-zones-v11-clean.png', ZONES_IMG_BOUNDS, { opacity:1, interactive:false });
   }
   if(zonesVisible){
     map.removeLayer(zonesOverlay);
