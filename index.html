@@ -6,7 +6,7 @@
 <title>Chasse Prignac-et-Marcamps</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-<script src="https://unpkg.com/leaflet-imageoverlay-rotated/"></script>
+<script src="https://unpkg.com/leaflet-imageoverlay-rotated@0.2.1/Leaflet.ImageOverlay.Rotated.js"></script>
 <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
 <style>
   :root{
@@ -508,6 +508,10 @@ var ZONES_IMG_BOTLEFT  = [44.990172, -0.535651];
 var zonesOverlay = null, zonesVisible = false;
 function toggleZonesChasse(){
   var btn = document.getElementById('btn-zonemap');
+  if(!L.imageOverlay || !L.imageOverlay.rotated){
+    toast('Le module carte des zones n\'a pas pu se charger (connexion ?)');
+    return;
+  }
   if(!zonesOverlay){
     zonesOverlay = L.imageOverlay.rotated('carte-zones.jpg', ZONES_IMG_TOPLEFT, ZONES_IMG_TOPRIGHT, ZONES_IMG_BOTLEFT, { opacity:0.8, interactive:false });
   }
@@ -529,6 +533,11 @@ function toggleZonesChasse(){
 // simplifie la règle légale), pas une référence officielle pour le respect de la
 // distance de sécurité de tir près des habitations.
 var zone150Group = null, zone150Loaded = false, zone150Visible = false, zone150Loading = false;
+var OVERPASS_MIRRORS = [
+  'https://overpass-api.de/api/interpreter',
+  'https://overpass.kumi.systems/api/interpreter',
+  'https://lz4.overpass-api.de/api/interpreter'
+];
 async function loadZone150(){
   if(zone150Loaded || zone150Loading || !communeBounds) return;
   zone150Loading = true;
@@ -537,8 +546,17 @@ async function loadZone150(){
     var s = communeBounds.getSouth(), w = communeBounds.getWest(), n = communeBounds.getNorth(), e = communeBounds.getEast();
     var bbox = s+','+w+','+n+','+e;
     var query = '[out:json][timeout:25];(way["building"]('+bbox+');node["building"]('+bbox+'););out center;';
-    var res = await fetch('https://overpass-api.de/api/interpreter', { method:'POST', body:'data='+encodeURIComponent(query) });
-    var data = await res.json();
+    var data = null, lastErr = null;
+    for(var i=0;i<OVERPASS_MIRRORS.length;i++){
+      try{
+        var res = await fetch(OVERPASS_MIRRORS[i], { method:'POST', body:'data='+encodeURIComponent(query) });
+        if(!res.ok) throw new Error('HTTP '+res.status);
+        var text = await res.text();
+        data = JSON.parse(text); // certains miroirs renvoient une page d'erreur HTML -> JSON.parse échoue, on tente le miroir suivant
+        break;
+      }catch(err){ lastErr = err; console.error('overpass mirror', OVERPASS_MIRRORS[i], err); }
+    }
+    if(!data) throw lastErr || new Error('tous les miroirs Overpass ont échoué');
     zone150Group = L.layerGroup();
     (data.elements||[]).forEach(function(el){
       var lat = el.type === 'node' ? el.lat : (el.center && el.center.lat);
@@ -549,7 +567,7 @@ async function loadZone150(){
     zone150Loaded = true;
   }catch(e){
     console.error('zone150', e);
-    toast('Impossible de charger les bâtiments (réseau ?)');
+    toast('Impossible de charger les bâtiments (serveur Overpass surchargé, réessaie plus tard)');
   }
   zone150Loading = false;
 }
