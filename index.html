@@ -6,6 +6,7 @@
 <title>Chasse Prignac-et-Marcamps</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/leaflet-imageoverlay-rotated/"></script>
 <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
 <style>
   :root{
@@ -414,7 +415,8 @@ function initMap(){
   L.control.zoom({ position:'topright' }).addTo(map);
   meMarker = L.circleMarker([44.977,-0.421], { radius:9, color:'#fff', weight:2, fillColor:'#2f6d3a', fillOpacity:1 }).addTo(map);
   meMarker.bindTooltip(profile ? (profile.prenom + ' (moi)') : 'Moi', { permanent:false });
-  map.on('click', function(e){ if(!freeMode) openPoiModal(e.latlng); });
+  // pas de POI au clic sur la carte : on passe uniquement par les boutons (🎯 / 📍),
+  // ça évite tout conflit avec le clic sur un chasseur ou une autre icône.
   registerTileCache();
   initShareButton();
 }
@@ -495,60 +497,29 @@ function addCommuneMask(geom){
 
 /* ===================== ZONES CHASSE (CPNC / RCFS / RRI / Superficie chassable) =====================
    Tracé approximatif recopié à la main depuis la carte papier envoyée par l'utilisateur, recalé
-   géographiquement à partir de quelques points de repère communs avec le contour officiel de la
-   commune (geo.api.gouv.fr). C'est une reconstitution indicative pour se repérer, pas un document
-   cadastral ou juridique. */
-var ZONES_RRI = [[-0.508908,45.033461],[-0.504135,45.033662],[-0.500865,45.03237],[-0.501829,45.030499],[-0.503889,45.028765],[-0.509062,45.02722],[-0.512711,45.027954],[-0.513921,45.030932]];
-var ZONES_CPNC_1 = [[-0.514558,45.020012],[-0.512258,45.016587],[-0.51302,45.015448],[-0.519381,45.010348],[-0.525086,45.016953]];
-var ZONES_CPNC_2 = [[-0.49504,45.030647],[-0.489528,45.031035],[-0.488683,45.028142],[-0.490192,45.026458],[-0.497159,45.026531]];
-var ZONES_RCFS_1 = [[-0.506159,45.040796],[-0.498069,45.041658],[-0.496654,45.03953],[-0.497454,45.036843],[-0.502624,45.035417],[-0.508115,45.035863],[-0.509491,45.039539]];
-var ZONES_RCFS_2 = [[-0.478073,45.019658],[-0.475696,45.019353],[-0.47703,45.017329],[-0.480385,45.01512],[-0.482994,45.013454],[-0.483878,45.014799],[-0.48217,45.017095],[-0.480303,45.018455]];
-var ZONES_VILLAGE_HOLE = [[-0.500389,45.03681],[-0.495925,45.03936],[-0.491128,45.040514],[-0.48597,45.041463],[-0.482341,45.039895],[-0.480947,45.036934],[-0.481012,45.034313],[-0.479594,45.032304],[-0.477815,45.030091],[-0.476036,45.027878],[-0.47166,45.026854],[-0.473177,45.024814],[-0.477992,45.022945],[-0.479877,45.020871],[-0.483594,45.018865],[-0.489126,45.017644],[-0.49164,45.019789],[-0.492316,45.022104],[-0.490787,45.024621],[-0.494434,45.025474],[-0.497345,45.026395],[-0.498757,45.028642],[-0.497963,45.031092],[-0.499374,45.033339],[-0.500418,45.035619]];
+   géographiquement sur le vrai fond de carte, à partir de points de repère communs avec le
+   contour officiel de la commune (geo.api.gouv.fr) : la pointe nord, la pointe ouest, le point sud
+   et le décrochement est. La légende (CPNC/RCFS/RRI) et l'échelle de la photo d'origine ont été
+   effacées de l'image pour ne pas afficher un cartouche au milieu de la carte. */
+var ZONES_IMG_TOPLEFT  = [45.051534, -0.534135];
+var ZONES_IMG_TOPRIGHT = [45.057703, -0.46701];
+var ZONES_IMG_BOTLEFT  = [44.990172, -0.535651];
 
-var zonesGroup = null, zonesVisible = false, zonesLoaded = false;
-function toLL(ring){ return ring.map(function(c){ return [c[1], c[0]]; }); } // [lng,lat] -> [lat,lng]
-
-function buildZonesLayer(){
-  if(!communeGeom) return; // il faut le contour officiel pour construire le trou "chassable"
-  zonesGroup = L.layerGroup();
-
-  // Superficie chassable = commune officielle moins les zones CPNC/RCFS/RRI et le centre bâti
-  var communePolys = communeGeom.type === 'Polygon' ? [communeGeom.coordinates] : communeGeom.coordinates;
-  communePolys.forEach(function(rings){
-    var outer = toLL(rings[0]);
-    var holes = [ZONES_RRI, ZONES_CPNC_1, ZONES_CPNC_2, ZONES_RCFS_1, ZONES_RCFS_2, ZONES_VILLAGE_HOLE].map(toLL);
-    L.polygon([outer].concat(holes), {
-      color:'#333', weight:1, fillColor:'#fff', fillOpacity:0.35, dashArray:'4,3'
-    }).bindTooltip('Superficie chassable (indicatif)').addTo(zonesGroup);
-  });
-
-  [ZONES_CPNC_1, ZONES_CPNC_2].forEach(function(z){
-    L.polygon(toLL(z), { color:'#a3336b', weight:2, fillColor:'#c48ba8', fillOpacity:0.55 })
-      .bindTooltip('CPNC').addTo(zonesGroup);
-  });
-  [ZONES_RCFS_1, ZONES_RCFS_2].forEach(function(z){
-    L.polygon(toLL(z), { color:'#2f6d46', weight:2, fillColor:'#5b9e73', fillOpacity:0.5 })
-      .bindTooltip('RCFS').addTo(zonesGroup);
-  });
-  L.polygon(toLL(ZONES_RRI), { color:'#c0743a', weight:2, dashArray:'6,4', fillColor:'#e0a878', fillOpacity:0.35 })
-    .bindTooltip('RRI').addTo(zonesGroup);
-
-  zonesLoaded = true;
-}
-
+var zonesOverlay = null, zonesVisible = false;
 function toggleZonesChasse(){
   var btn = document.getElementById('btn-zonemap');
-  if(!zonesLoaded) buildZonesLayer();
-  if(!zonesGroup) { toast('Contour de la commune pas encore chargé, réessaie dans un instant'); return; }
+  if(!zonesOverlay){
+    zonesOverlay = L.imageOverlay.rotated('carte-zones.jpg', ZONES_IMG_TOPLEFT, ZONES_IMG_TOPRIGHT, ZONES_IMG_BOTLEFT, { opacity:0.8, interactive:false });
+  }
   if(zonesVisible){
-    map.removeLayer(zonesGroup);
+    map.removeLayer(zonesOverlay);
     document.getElementById('zones-legend').classList.remove('on');
     zonesVisible = false; btn.classList.remove('on');
   } else {
-    zonesGroup.addTo(map);
+    zonesOverlay.addTo(map);
     document.getElementById('zones-legend').classList.add('on');
     zonesVisible = true; btn.classList.add('on');
-    toast('Zones indicatives recopiées depuis ta carte papier');
+    toast('Carte des zones recalée sur le fond de carte (approximatif)');
   }
 }
 
