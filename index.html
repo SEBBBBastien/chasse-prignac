@@ -213,7 +213,7 @@
         <button onclick="openPoiModal(null)" title="POI à ma position">📍</button>
       </div>
       <div class="zones-legend" id="zones-legend">
-        <div><span class="sw" style="background:#fff;border:2px solid #cc3333"></span>Superficie chassable</div>
+        <div><span class="sw" style="background:#fff;border:2px solid #148c28"></span>Superficie chassable</div>
       </div>
     </div>
 
@@ -504,20 +504,23 @@ function addCommuneMask(geom){
 }
 
 /* ===================== ZONES CHASSE (Superficie chassable) =====================
-   v6 : au lieu de redessiner les zones (vectoriel) ou de poser toute la photo de la carte papier,
+   v8 : au lieu de redessiner les zones (vectoriel) ou de poser toute la photo de la carte papier,
    on repasse directement sur les VRAIS traits d'encre de la carte papier : détection des pixels
    sombres (hachures + ligne de contour) sur la photo redressée, en excluant le texte/bâtiments
-   hors zone. Le résultat est une image quasi entièrement transparente, ne contenant que ces
-   traits recolorés en rouge, calée sur les mêmes coordonnées précises que le reste de l'appli
-   (recalage au plus proche point sur le contour officiel geo.api.gouv.fr). Rien n'est réinterprété
-   ou lissé à la main : ce sont les pixels réels de la carte photographiée. */
+   hors zone. Le texte "Commune de Prignac-et-Marcamps" imprimé par-dessus les hachures a été
+   retiré ; comme il masquait les vrais traits d'encre à cet endroit précis, ces quelques hachures
+   ont été prolongées en suivant leur vrai angle (~45°) mesuré sur les traits visibles juste au-dessus,
+   pour ne pas laisser de trou au milieu de la zone. Le résultat est une image quasi entièrement
+   transparente, ne contenant que ces traits recolorés en vert (zone chassable = autorisée, pas
+   interdite), calée sur les mêmes coordonnées précises que le reste de l'appli (recalage au plus
+   proche point sur le contour officiel geo.api.gouv.fr). */
 var ZONES_IMG_BOUNDS = [[45.001657, -0.525150], [45.053505, -0.472994]];
 
 var zonesOverlay = null, zonesVisible = false;
 function toggleZonesChasse(){
   var btn = document.getElementById('btn-zonemap');
   if(!zonesOverlay){
-    zonesOverlay = L.imageOverlay('carte-zones-v5.png', ZONES_IMG_BOUNDS, { opacity:0.95, interactive:false });
+    zonesOverlay = L.imageOverlay('carte-zones-v8.png', ZONES_IMG_BOUNDS, { opacity:0.95, interactive:false });
   }
   if(zonesVisible){
     map.removeLayer(zonesOverlay);
@@ -527,7 +530,7 @@ function toggleZonesChasse(){
     zonesOverlay.addTo(map);
     document.getElementById('zones-legend').classList.add('on');
     zonesVisible = true; btn.classList.add('on');
-    toast('Traits de la carte papier repassés en rouge, superposés au fond de carte');
+    toast('Traits de la carte papier repassés en vert, superposés au fond de carte');
   }
 }
 
