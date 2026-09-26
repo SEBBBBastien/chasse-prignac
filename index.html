@@ -70,6 +70,11 @@
   .layers-menu button{width:100%;text-align:left;padding:8px 10px;border-radius:7px;background:var(--gris-l);color:#374151;font-size:13px;font-weight:600;display:flex;align-items:center;gap:8px;}
   .layers-menu button.on{background:var(--vert);color:#fff;}
 
+  .zones-legend{position:absolute;left:10px;bottom:calc(16px + env(safe-area-inset-bottom));z-index:900;display:none;background:#fff;border-radius:10px;padding:8px 10px;box-shadow:var(--ombre);font-size:11px;color:#374151;}
+  .zones-legend.on{display:block;}
+  .zones-legend div{display:flex;align-items:center;gap:6px;margin:2px 0;}
+  .zones-legend span.sw{width:14px;height:14px;border-radius:3px;display:inline-block;flex:none;}
+
   .fab-poi{position:absolute;right:14px;bottom:calc(16px + env(safe-area-inset-bottom));z-index:900;}
   .fab-poi button{width:52px;height:52px;border-radius:50%;background:var(--vert);color:#fff;box-shadow:var(--ombre);font-size:21px;display:flex;align-items:center;justify-content:center;}
 
@@ -201,11 +206,17 @@
       </div>
       <div class="layers-menu" id="layers-menu">
         <button onclick="toggleSatellite()" id="btn-sat">🛰️ Satellite</button>
-        <button onclick="toggleFdc33()" id="btn-fdc33">🏞️ Zones FDC33</button>
+        <button onclick="toggleZonesChasse()" id="btn-zonemap">🗺️ Zones (CPNC/RCFS/RRI)</button>
         <button onclick="toggleZone150()" id="btn-150">🏠 Zone 150m</button>
       </div>
       <div class="fab-poi">
         <button onclick="openPoiModal(null)" title="POI à ma position">📍</button>
+      </div>
+      <div class="zones-legend" id="zones-legend">
+        <div><span class="sw" style="background:#c48ba8;border:1px solid #a3336b"></span>CPNC</div>
+        <div><span class="sw" style="background:#5b9e73;border:1px solid #2f6d46"></span>RCFS</div>
+        <div><span class="sw" style="background:#e0a878;border:1px solid #c0743a"></span>RRI</div>
+        <div><span class="sw" style="background:#fff;border:1px dashed #333"></span>Superficie chassable</div>
       </div>
     </div>
 
@@ -416,7 +427,6 @@ function toggleLayersMenu(){
 }
 
 function toggleSatellite(){
-  if(fdc33Visible){ toast('Désactive d\'abord la carte FDC33 (🏞️)'); return; }
   var btn = document.getElementById('btn-sat');
   if(baseLayer === 'osm'){
     map.removeLayer(osmLayer); satLayer.addTo(map); baseLayer = 'sat';
@@ -483,30 +493,62 @@ function addCommuneMask(geom){
   }).addTo(map);
 }
 
-/* ===================== ZONES FDC33 (chassable / réserves) ===================== */
-var fdc33Wms = null, fdc33Visible = false;
-function toggleFdc33(){
-  var btn = document.getElementById('btn-fdc33');
-  if(!fdc33Wms){
-    fdc33Wms = L.tileLayer.wms('https://lizmap.observatoire-environnement.org/lm/index.php/lizmap/service/?repository=fdc33&project=BASE_INTERNET', {
-      layers: 'Territoires chassables,Réserves,Territoire de non chasse',
-      format: 'image/png',
-      transparent: true,
-      version: '1.3.0',
-      opacity: 1,
-      attribution: 'FDC33'
-    });
-  }
-  var currentBase = baseLayer === 'sat' ? satLayer : osmLayer;
-  if(fdc33Visible){
-    map.removeLayer(fdc33Wms);
-    currentBase.addTo(map);
-    fdc33Visible = false; btn.classList.remove('on');
+/* ===================== ZONES CHASSE (CPNC / RCFS / RRI / Superficie chassable) =====================
+   Tracé approximatif recopié à la main depuis la carte papier envoyée par l'utilisateur, recalé
+   géographiquement à partir de quelques points de repère communs avec le contour officiel de la
+   commune (geo.api.gouv.fr). C'est une reconstitution indicative pour se repérer, pas un document
+   cadastral ou juridique. */
+var ZONES_RRI = [[-0.508908,45.033461],[-0.504135,45.033662],[-0.500865,45.03237],[-0.501829,45.030499],[-0.503889,45.028765],[-0.509062,45.02722],[-0.512711,45.027954],[-0.513921,45.030932]];
+var ZONES_CPNC_1 = [[-0.514558,45.020012],[-0.512258,45.016587],[-0.51302,45.015448],[-0.519381,45.010348],[-0.525086,45.016953]];
+var ZONES_CPNC_2 = [[-0.49504,45.030647],[-0.489528,45.031035],[-0.488683,45.028142],[-0.490192,45.026458],[-0.497159,45.026531]];
+var ZONES_RCFS_1 = [[-0.506159,45.040796],[-0.498069,45.041658],[-0.496654,45.03953],[-0.497454,45.036843],[-0.502624,45.035417],[-0.508115,45.035863],[-0.509491,45.039539]];
+var ZONES_RCFS_2 = [[-0.478073,45.019658],[-0.475696,45.019353],[-0.47703,45.017329],[-0.480385,45.01512],[-0.482994,45.013454],[-0.483878,45.014799],[-0.48217,45.017095],[-0.480303,45.018455]];
+var ZONES_VILLAGE_HOLE = [[-0.500389,45.03681],[-0.495925,45.03936],[-0.491128,45.040514],[-0.48597,45.041463],[-0.482341,45.039895],[-0.480947,45.036934],[-0.481012,45.034313],[-0.479594,45.032304],[-0.477815,45.030091],[-0.476036,45.027878],[-0.47166,45.026854],[-0.473177,45.024814],[-0.477992,45.022945],[-0.479877,45.020871],[-0.483594,45.018865],[-0.489126,45.017644],[-0.49164,45.019789],[-0.492316,45.022104],[-0.490787,45.024621],[-0.494434,45.025474],[-0.497345,45.026395],[-0.498757,45.028642],[-0.497963,45.031092],[-0.499374,45.033339],[-0.500418,45.035619]];
+
+var zonesGroup = null, zonesVisible = false, zonesLoaded = false;
+function toLL(ring){ return ring.map(function(c){ return [c[1], c[0]]; }); } // [lng,lat] -> [lat,lng]
+
+function buildZonesLayer(){
+  if(!communeGeom) return; // il faut le contour officiel pour construire le trou "chassable"
+  zonesGroup = L.layerGroup();
+
+  // Superficie chassable = commune officielle moins les zones CPNC/RCFS/RRI et le centre bâti
+  var communePolys = communeGeom.type === 'Polygon' ? [communeGeom.coordinates] : communeGeom.coordinates;
+  communePolys.forEach(function(rings){
+    var outer = toLL(rings[0]);
+    var holes = [ZONES_RRI, ZONES_CPNC_1, ZONES_CPNC_2, ZONES_RCFS_1, ZONES_RCFS_2, ZONES_VILLAGE_HOLE].map(toLL);
+    L.polygon([outer].concat(holes), {
+      color:'#333', weight:1, fillColor:'#fff', fillOpacity:0.35, dashArray:'4,3'
+    }).bindTooltip('Superficie chassable (indicatif)').addTo(zonesGroup);
+  });
+
+  [ZONES_CPNC_1, ZONES_CPNC_2].forEach(function(z){
+    L.polygon(toLL(z), { color:'#a3336b', weight:2, fillColor:'#c48ba8', fillOpacity:0.55 })
+      .bindTooltip('CPNC').addTo(zonesGroup);
+  });
+  [ZONES_RCFS_1, ZONES_RCFS_2].forEach(function(z){
+    L.polygon(toLL(z), { color:'#2f6d46', weight:2, fillColor:'#5b9e73', fillOpacity:0.5 })
+      .bindTooltip('RCFS').addTo(zonesGroup);
+  });
+  L.polygon(toLL(ZONES_RRI), { color:'#c0743a', weight:2, dashArray:'6,4', fillColor:'#e0a878', fillOpacity:0.35 })
+    .bindTooltip('RRI').addTo(zonesGroup);
+
+  zonesLoaded = true;
+}
+
+function toggleZonesChasse(){
+  var btn = document.getElementById('btn-zonemap');
+  if(!zonesLoaded) buildZonesLayer();
+  if(!zonesGroup) { toast('Contour de la commune pas encore chargé, réessaie dans un instant'); return; }
+  if(zonesVisible){
+    map.removeLayer(zonesGroup);
+    document.getElementById('zones-legend').classList.remove('on');
+    zonesVisible = false; btn.classList.remove('on');
   } else {
-    map.removeLayer(currentBase);
-    fdc33Wms.addTo(map);
-    fdc33Visible = true; btn.classList.add('on');
-    toast('Carte officielle FDC33 : zones chassables / réserves');
+    zonesGroup.addTo(map);
+    document.getElementById('zones-legend').classList.add('on');
+    zonesVisible = true; btn.classList.add('on');
+    toast('Zones indicatives recopiées depuis ta carte papier');
   }
 }
 
@@ -623,6 +665,13 @@ function upsertUserOnMap(uid, lat, lng, path){
     if(!userMarkers[uid]){
       userMarkers[uid] = L.circleMarker([lat,lng], { radius:8, color:'#fff', weight:2, fillColor:col, fillOpacity:1, bubblingMouseEvents:false }).addTo(map);
       userMarkers[uid].bindPopup('<b>'+escapeHtml(fullName)+'</b>');
+      // double sécurité : même si l'event remonte jusqu'à la carte, on l'arrête
+      // ici et on force l'ouverture du popup nous-mêmes, pour ne jamais tomber
+      // sur openPoiModal quand on clique sur un chasseur.
+      userMarkers[uid].on('click', function(e){
+        L.DomEvent.stop(e);
+        userMarkers[uid].openPopup();
+      });
     } else {
       userMarkers[uid].setLatLng([lat,lng]);
       userMarkers[uid].setPopupContent('<b>'+escapeHtml(fullName)+'</b>');
