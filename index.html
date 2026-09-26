@@ -507,19 +507,21 @@ function addCommuneMask(geom){
 }
 
 /* ===================== ZONES CHASSE (CPNC / RCFS / RRI / Superficie chassable) =====================
-   Photo envoyée par l'utilisateur, redressée (correction de perspective par homographie, pas
-   une simple rotation) et recalée sur 6 points de repère communs avec le contour officiel de la
-   commune (geo.api.gouv.fr) : pointe nord, pointe ouest, point sud, décrochement est, bord ouest
-   et poche de St-Denis/Maillot. Une fois redressée, l'image est alignée sur lon/lat, donc un
-   simple rectangle (imageOverlay classique) suffit, plus besoin de plugin de rotation.
-   La légende (CPNC/RCFS/RRI) et l'échelle d'origine ont été effacées de l'image. */
-var ZONES_IMG_BOUNDS = [[44.985, -0.540], [45.058, -0.465]];
+   Recalage v4 : au lieu de repartir des points de repère choisis à la main sur la photo brute,
+   on part d'un calque que l'utilisateur a lui-même positionné et mis à l'échelle dans Photoshop
+   par-dessus une vraie capture satellite de l'app (avec le contour officiel de la commune dessiné
+   dessus). En détectant automatiquement le tracé du contour officiel sur cette capture (par
+   couleur de pixel) et en ajustant la carte des zones dessus par recalage itératif au plus proche
+   point (ICP), on obtient une correspondance pixel -> lon/lat précise au mètre près, bien plus
+   fiable que le pointage manuel de repères sur la photo déformée. La rotation résiduelle est
+   négligeable (<0.2°), donc un simple rectangle (imageOverlay classique) suffit. */
+var ZONES_IMG_BOUNDS = [[45.001657, -0.525150], [45.053505, -0.472994]];
 
 var zonesOverlay = null, zonesVisible = false;
 function toggleZonesChasse(){
   var btn = document.getElementById('btn-zonemap');
   if(!zonesOverlay){
-    zonesOverlay = L.imageOverlay('carte-zones-v3.png', ZONES_IMG_BOUNDS, { opacity:0.85, interactive:false });
+    zonesOverlay = L.imageOverlay('carte-zones-v4.png', ZONES_IMG_BOUNDS, { opacity:0.85, interactive:false });
   }
   if(zonesVisible){
     map.removeLayer(zonesOverlay);
