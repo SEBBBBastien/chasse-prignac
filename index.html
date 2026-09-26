@@ -121,9 +121,10 @@
   .modal{background:#fff;border-radius:16px 16px 0 0;width:100%;max-width:480px;padding:18px 18px 24px;max-height:85vh;overflow:auto;}
   .modal h3{margin:0 0 4px;font-size:16px;color:var(--vert-d);}
   .modal .close{position:absolute;}
-  .modal-bg.center .modal.modal-img{max-width:96vw;max-height:92vh;padding:0;overflow:auto;background:#111;position:relative;}
-  .modal-img img{width:100%;height:auto;display:block;border-radius:8px;}
-  .modal-img .close-x{position:sticky;top:8px;left:100%;transform:translateX(-44px);width:36px;height:36px;border-radius:50%;background:rgba(0,0,0,.6);color:#fff;border:none;font-size:18px;line-height:36px;text-align:center;padding:0;z-index:1;}
+  .modal-bg.center .modal.modal-img{width:96vw;height:92vh;max-width:96vw;max-height:92vh;padding:0;overflow:hidden;background:#111;position:relative;}
+  .modal-img .zoom-wrap{width:100%;height:100%;overflow:hidden;touch-action:none;position:relative;}
+  .modal-img .zoom-wrap img{width:100%;height:100%;object-fit:contain;display:block;border-radius:8px;touch-action:none;user-select:none;-webkit-user-select:none;transform-origin:center center;will-change:transform;}
+  .modal-img .close-x{position:absolute;top:8px;right:8px;width:36px;height:36px;border-radius:50%;background:rgba(0,0,0,.6);color:#fff;border:none;font-size:18px;line-height:36px;text-align:center;padding:0;z-index:2;}
   .radio-row{display:flex;gap:10px;margin-top:6px;}
   .radio-row label{flex:1;display:flex;align-items:center;gap:6px;background:var(--gris-l);padding:10px;border-radius:10px;font-size:13px;font-weight:600;margin:0;}
   .radio-row input{width:auto;}
@@ -208,14 +209,14 @@
         <button onclick="toggleLayersMenu()" title="Fonds de carte" id="btn-layers">🗂️</button>
       </div>
       <div class="layers-menu" id="layers-menu">
-        <button onclick="toggleZonesChasse()" id="btn-zonemap">🗺️ Superficie chassable</button>
+        <button onclick="toggleZonesChasse()" id="btn-zonemap">🗺️ Zone chassable</button>
         <button onclick="showCartePapier()" id="btn-carte-papier">📄 Carte papier</button>
       </div>
       <div class="fab-poi">
         <button onclick="openPoiModal(null)" title="POI à ma position">📍</button>
       </div>
       <div class="zones-legend" id="zones-legend">
-        <div><span class="sw" style="background:#fff;border:2px solid #22c55e"></span>Superficie chassable</div>
+        <div><span class="sw" style="background:#fff;border:2px solid #22c55e"></span>Zone chassable</div>
       </div>
     </div>
 
@@ -494,7 +495,7 @@ function addCommuneMask(geom){
   }).addTo(map);
 }
 
-/* ===================== ZONES CHASSE (Superficie chassable) =====================
+/* ===================== ZONES CHASSE (Zone chassable) =====================
    v16 : Sébastien a dessiné lui-même la vraie zone chassable à la main (en vert)
    par-dessus la carte papier complète, pour être sûr que ce soit exact. Sur sa
    demande explicite ("prends la carte tel quel, ne change rien"), on n'essaie
@@ -566,7 +567,7 @@ function toggleZonesChasse(){
     zonesOverlay.addTo(map);
     document.getElementById('zones-legend').classList.add('on');
     zonesVisible = true; btn.classList.add('on');
-    toast('Superficie chassable (ton tracé) superposée au fond de carte');
+    toast('Zone chassable (ton tracé) superposée au fond de carte');
   }
 }
 
