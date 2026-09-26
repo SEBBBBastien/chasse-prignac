@@ -491,7 +491,7 @@ function addCommuneMask(geom){
 }
 
 /* ===================== ZONES CHASSE (Superficie chassable) =====================
-   v10 : au lieu de redessiner les zones (vectoriel) ou de poser toute la photo de la carte papier,
+   v9 : au lieu de redessiner les zones (vectoriel) ou de poser toute la photo de la carte papier,
    on repasse directement sur les VRAIS traits d'encre de la carte papier : détection des pixels
    sombres (hachures + ligne de contour) sur la photo redressée, en excluant le texte/bâtiments
    hors zone. Le texte "Commune de Prignac-et-Marcamps" imprimé par-dessus les hachures a été
@@ -500,20 +500,18 @@ function addCommuneMask(geom){
    pour ne pas laisser de trou au milieu de la zone. Les traits sont recolorés en vert (zone
    chassable = autorisée, pas interdite), légèrement épaissis et cerclés d'un fin liseré sombre pour
    rester bien visibles quelle que soit la couleur du sol en dessous (vue satellite).
-   Recalage v10 : le calage précédent était sensiblement trop grand et légèrement tourné (jusqu'à
-   ~400m d'écart par endroits avec le contour officiel de la commune). Le tracé a été comparé
-   point par point au contour officiel (geo.api.gouv.fr) sur les portions où la limite de la zone
-   chassable correspond réellement à la limite de commune (au sud et au sud-ouest ; la pointe
-   nord-est de la commune est boisée et n'est de toute façon pas hachurée sur la carte papier),
-   puis l'image a été légèrement pivotée/redimensionnée pour coller à ce contour officiel :
-   l'écart moyen est passé d'environ 400m à moins de 60m. */
-var ZONES_IMG_BOUNDS = [[45.000494, -0.535961], [45.050145, -0.473654]];
+   ATTENTION calage : le calage précis (ZONES_IMG_BOUNDS) n'est PAS encore fiable - plusieurs
+   tentatives de recalage automatique (via le contour officiel geo.api.gouv.fr) ont échoué ou
+   empiré les choses. En attendant une méthode fiable (probablement en repartant du PSD où
+   Sébastien avait aligné la carte à la main sur une vraie image satellite), on reste sur ce
+   calage-ci, qui n'est pas parfait mais pas pire que les tentatives suivantes. */
+var ZONES_IMG_BOUNDS = [[45.001657, -0.525150], [45.053505, -0.472994]];
 
 var zonesOverlay = null, zonesVisible = false;
 function toggleZonesChasse(){
   var btn = document.getElementById('btn-zonemap');
   if(!zonesOverlay){
-    zonesOverlay = L.imageOverlay('carte-zones-v10.png', ZONES_IMG_BOUNDS, { opacity:1, interactive:false });
+    zonesOverlay = L.imageOverlay('carte-zones-v9.png', ZONES_IMG_BOUNDS, { opacity:1, interactive:false });
   }
   if(zonesVisible){
     map.removeLayer(zonesOverlay);
