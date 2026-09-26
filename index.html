@@ -103,7 +103,7 @@
   <header>
     <h1>Carte DFCI & Zone de Chasse - Prignac-et-Marcamps</h1>
     <div class="controls">
-      <button id="btn-zonemap" class="btn" onclick="toggleZonesChasse()">Zone Chassable (Vert)</button>
+      <button id="btn-zonemap" class="btn">Zone Chassable (Vert)</button>
     </div>
   </header>
 
@@ -126,6 +126,7 @@
     // Variables globales
     var communeGeom = null;
     var zonesChasseLayer = null;
+    var isZoneActive = false;
 
     // Légende Leaflet
     var legend = L.control({ position: 'bottomleft' });
@@ -145,7 +146,7 @@
     };
     legend.addTo(map);
 
-    // Notification Toast
+    // Fonction Toast pour notifications
     function toast(message) {
       var t = document.getElementById("toast");
       t.innerText = message;
@@ -153,13 +154,53 @@
       setTimeout(function(){ t.style.display = "none"; }, 3000);
     }
 
+    // Affichage / Masquage de la zone verte
+    function updateZoneChasse() {
+      var btn = document.getElementById('btn-zonemap');
+      var legendZone = document.getElementById('zones-legend');
+
+      if (!communeGeom) {
+        toast("Chargement des contours en cours, veuillez patienter...");
+        return;
+      }
+
+      if (isZoneActive) {
+        // Désactivation
+        if (zonesChasseLayer && map.hasLayer(zonesChasseLayer)) {
+          map.removeLayer(zonesChasseLayer);
+        }
+        btn.classList.remove('on');
+        if (legendZone) legendZone.style.display = 'none';
+        isZoneActive = false;
+      } else {
+        // Activation
+        if (!zonesChasseLayer) {
+          zonesChasseLayer = L.geoJSON(communeGeom, {
+            style: {
+              color: '#22c55e',       // Contour vert
+              weight: 2,
+              fillColor: '#22c55e',   // Remplissage vert
+              fillOpacity: 0.35
+            }
+          });
+        }
+        zonesChasseLayer.addTo(map);
+        btn.classList.add('on');
+        if (legendZone) legendZone.style.display = 'flex';
+        isZoneActive = true;
+      }
+    }
+
+    // Attacher l'événement au bouton
+    document.getElementById('btn-zonemap').addEventListener('click', updateZoneChasse);
+
     // Chargement des contours officiels de Prignac-et-Marcamps (INSEE 33339)
     fetch('https://geo.api.gouv.fr/communes/33339?fields=contour&format=geojson')
       .then(response => response.json())
       .then(data => {
         communeGeom = data;
 
-        // Affichage des contours officiels en bleu
+        // Affichage initial des contours communaux (bleu fin)
         L.geoJSON(communeGeom, {
           style: {
             color: '#1e3a8a',
@@ -170,41 +211,9 @@
         }).addTo(map);
       })
       .catch(err => {
-        console.error("Erreur de chargement des contours communaux:", err);
-        toast("Erreur lors du chargement des limites communales.");
+        console.error("Erreur de chargement des contours:", err);
+        toast("Impossible de charger la limite communale.");
       });
-
-    // Basculer l'affichage de la zone verte chassable (GeoJSON ajusté)
-    function toggleZonesChasse() {
-      var btn = document.getElementById('btn-zonemap');
-      var legendZone = document.getElementById('zones-legend');
-
-      // Si le calque existe déjà, on le retire
-      if (zonesChasseLayer && map.hasLayer(zonesChasseLayer)) {
-        map.removeLayer(zonesChasseLayer);
-        btn.classList.remove('on');
-        legendZone.style.display = 'none';
-        return;
-      }
-
-      // Génération de la zone basée sur la géométrie vectorielle de la commune
-      if (communeGeom) {
-        zonesChasseLayer = L.geoJSON(communeGeom, {
-          style: {
-            color: '#22c55e',       // Contour vert
-            weight: 2,
-            fillColor: '#22c55e',   // Remplissage vert
-            fillOpacity: 0.35
-          }
-        });
-
-        zonesChasseLayer.addTo(map);
-        btn.classList.add('on');
-        legendZone.style.display = 'flex';
-      } else {
-        toast("Les limites communales ne sont pas encore chargées.");
-      }
-    }
   </script>
 </body>
 </html>
