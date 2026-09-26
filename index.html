@@ -65,6 +65,10 @@
   .map-tools{position:absolute;top:92px;right:10px;z-index:900;display:flex;flex-direction:column;gap:8px;}
   .map-tools button{width:36px;height:36px;border-radius:8px;background:#fff;box-shadow:var(--ombre);font-size:16px;color:var(--gris);display:flex;align-items:center;justify-content:center;}
   .map-tools button.on{background:var(--vert);color:#fff;}
+  .layers-menu{position:absolute;top:180px;right:10px;z-index:900;display:none;flex-direction:column;gap:6px;background:#fff;border-radius:10px;padding:8px;box-shadow:var(--ombre);min-width:170px;}
+  .layers-menu.on{display:flex;}
+  .layers-menu button{width:100%;text-align:left;padding:8px 10px;border-radius:7px;background:var(--gris-l);color:#374151;font-size:13px;font-weight:600;display:flex;align-items:center;gap:8px;}
+  .layers-menu button.on{background:var(--vert);color:#fff;}
 
   .fab-poi{position:absolute;right:14px;bottom:calc(16px + env(safe-area-inset-bottom));z-index:900;}
   .fab-poi button{width:52px;height:52px;border-radius:50%;background:var(--vert);color:#fff;box-shadow:var(--ombre);font-size:21px;display:flex;align-items:center;justify-content:center;}
@@ -191,11 +195,14 @@
         <button class="ok" onclick="confirmFreePlacement()">Placer ici</button>
       </div>
       <div class="map-tools">
-        <button onclick="toggleSatellite()" title="Vue satellite" id="btn-sat">🛰️</button>
         <button onclick="startFreePlacement()" title="Poser un POI librement" id="btn-free">🎯</button>
         <button onclick="toggleShare()" title="Cacher ma position" id="btn-share">👁️</button>
-        <button onclick="toggleFdc33()" title="Zones chassables / réserves (FDC33)" id="btn-fdc33">🏞️</button>
-        <button onclick="toggleZone150()" title="Zone indicative des 150m autour des habitations" id="btn-150">🏠</button>
+        <button onclick="toggleLayersMenu()" title="Fonds de carte" id="btn-layers">🗂️</button>
+      </div>
+      <div class="layers-menu" id="layers-menu">
+        <button onclick="toggleSatellite()" id="btn-sat">🛰️ Satellite</button>
+        <button onclick="toggleFdc33()" id="btn-fdc33">🏞️ Zones FDC33</button>
+        <button onclick="toggleZone150()" id="btn-150">🏠 Zone 150m</button>
       </div>
       <div class="fab-poi">
         <button onclick="openPoiModal(null)" title="POI à ma position">📍</button>
@@ -401,7 +408,15 @@ function initMap(){
   initShareButton();
 }
 
+function toggleLayersMenu(){
+  var menu = document.getElementById('layers-menu');
+  var btn = document.getElementById('btn-layers');
+  var open = menu.classList.toggle('on');
+  btn.classList.toggle('on', open);
+}
+
 function toggleSatellite(){
+  if(fdc33Visible){ toast('Désactive d\'abord la carte FDC33 (🏞️)'); return; }
   var btn = document.getElementById('btn-sat');
   if(baseLayer === 'osm'){
     map.removeLayer(osmLayer); satLayer.addTo(map); baseLayer = 'sat';
@@ -478,15 +493,20 @@ function toggleFdc33(){
       format: 'image/png',
       transparent: true,
       version: '1.3.0',
-      opacity: 0.6,
+      opacity: 1,
       attribution: 'FDC33'
     });
   }
+  var currentBase = baseLayer === 'sat' ? satLayer : osmLayer;
   if(fdc33Visible){
-    map.removeLayer(fdc33Wms); fdc33Visible = false; btn.classList.remove('on');
+    map.removeLayer(fdc33Wms);
+    currentBase.addTo(map);
+    fdc33Visible = false; btn.classList.remove('on');
   } else {
-    fdc33Wms.addTo(map); fdc33Visible = true; btn.classList.add('on');
-    toast('Fond officiel FDC33 : zones chassables / réserves');
+    map.removeLayer(currentBase);
+    fdc33Wms.addTo(map);
+    fdc33Visible = true; btn.classList.add('on');
+    toast('Carte officielle FDC33 : zones chassables / réserves');
   }
 }
 
@@ -601,7 +621,7 @@ function upsertUserOnMap(uid, lat, lng, path){
   if(!fullName) fullName = 'Chasseur';
   if(uid !== currentUser.id){
     if(!userMarkers[uid]){
-      userMarkers[uid] = L.circleMarker([lat,lng], { radius:8, color:'#fff', weight:2, fillColor:col, fillOpacity:1 }).addTo(map);
+      userMarkers[uid] = L.circleMarker([lat,lng], { radius:8, color:'#fff', weight:2, fillColor:col, fillOpacity:1, bubblingMouseEvents:false }).addTo(map);
       userMarkers[uid].bindPopup('<b>'+escapeHtml(fullName)+'</b>');
     } else {
       userMarkers[uid].setLatLng([lat,lng]);
