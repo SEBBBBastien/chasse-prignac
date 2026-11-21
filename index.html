@@ -1025,7 +1025,7 @@ async function loadAdmin(){
       +'<div style="font-size:12px;color:var(--gris)">'+escapeHtml(p.email||'')+'</div></div>'
       +(self ? '' : '<div style="display:flex;flex-direction:column;gap:6px;align-items:flex-end">'
         +'<button class="small-btn" onclick="toggleAdmin(\''+p.id+'\','+(!p.is_admin)+')">'+(p.is_admin?'Retirer admin':'Rendre admin')+'</button>'
-        +'<button class="small-btn danger" onclick="revokeUser(\''+p.id+'\',\''+escapeHtml(p.prenom||'ce chasseur').replace(/'/g,"\\'")+'\')">Retirer l\'accès</button>'
+        +'<button class="small-btn danger" onclick="revokeUser(\''+p.id+'\')">Retirer l\'accès</button>'
         +'</div>')
       +'</div></div>';
   }).join('') : '<div class="empty">Aucun chasseur validé pour l\'instant</div>';
@@ -1047,7 +1047,9 @@ async function toggleAdmin(id, val){
   var { error } = await sb.from('chasse_profiles').update({ is_admin: val }).eq('id', id);
   if(error) toast('Erreur: '+error.message); else { toast(val?'Promu admin':'Droits admin retirés'); loadAdmin(); }
 }
-async function revokeUser(id, nom){
+async function revokeUser(id){
+  var { data: prof } = await sb.from('chasse_profiles').select('prenom').eq('id', id).maybeSingle();
+  var nom = (prof && prof.prenom) || 'ce chasseur';
   if(!confirm('Retirer l\'accès de '+nom+' ? Il repassera en attente de validation et ne verra plus la carte, les POI ni les réservations tant qu\'il n\'est pas revalidé.')) return;
   var { error } = await sb.from('chasse_profiles').update({ approved:false, is_admin:false }).eq('id', id);
   if(error){ toast('Erreur: '+error.message); return; }
